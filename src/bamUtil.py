@@ -3,20 +3,33 @@ import numpy as np
 import random
 from seqUtil import *
 
-def getAlignedReads(sam, region, pname = False, reverse = False):
+def getAlignedReads(sam, region, print_quer = False, print_name = False, print_ref = False, genome = '', reverse = False):
     '''
     sam: input sam/bam file.
     region: region to fetch aligned reads.
         E.g. region = chrI:12300-12500
-    pname: print the readname or not.
+    print_name: Set true to print readname.
+    print_ref: Set true to print reference sequnce. If true, must provide genome.
+    genome: reference genome indexed with faidx.
+    reverse: Set True to reverse compliment reads mapped to negative strands.
     '''
     
+    cigarCode = {1: 'I', 2: 'D', 3: 'N'}
     chrom = region.split(':')[0]
     locus = region.split(':')[1].split('-')
     qstart, qend = int(locus[0]), int(locus[1])
     qrange = qend - qstart
-    
+    out = {}
+
     samFile = pysam.AlignmentFile(sam)
+    if genome:
+        refFile = pysam.FastaFile(genome)
+        read = refFile.fetch(chrom, qstart, qend)
+        if print_name:
+            print(region)
+        if print_ref:
+            print(read)
+        out['ref'] = read
     for s in samFile.fetch(chrom, qstart, qend):
         if not s.is_secondary and not s.is_supplementary:
             alignstart, alignend = s.reference_start, s.reference_end
@@ -32,15 +45,19 @@ def getAlignedReads(sam, region, pname = False, reverse = False):
                         alignedRead += seq[quer:quer+cigarTag[1]]
                         quer += cigarTag[1]
                     elif cigarTag[0] in {2,3}:
-                        alignedRead += cigarTag[1]*'N'
-                    else:
+                        alignedRead += cigarTag[1]*cigarCode[cigarTag[0]]
+                    elif cigarTag[0] in {1,4,5,6}:
                         quer += cigarTag[1]
-                if pname:
-                    print('>', s.query_name, alignstart, alignend)
+                if print_name:
+                    print(s.query_name)
                 qpos = qstart-alignstart
                 if reverse:
                     if s.is_reverse:
                         alignedRead = reverseCompliment(alignedRead)
                 string = alignedRead[qpos:qpos+qrange]
-                print(string)
+                string = alignedRead[qpos:qpos+qrange]
+                if print_quer:
+                    print(string)
+                out[s.query_name] = string
+    return out
     samFile.close()

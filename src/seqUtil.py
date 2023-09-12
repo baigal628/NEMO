@@ -1,6 +1,7 @@
 import pysam
 import numpy
 import random
+from IPython.display import display, HTML
 
 def fetchSize(genome):
     '''Input a genome.fa file, get the chromsome bounderies.'''
@@ -23,7 +24,7 @@ def fetchSize(genome):
             genomeSize[chrom] = len(sequence)
     return genomeSize
 
-def randomPosition(n, genome, windowSize, mode = 'even',):predictedThreshold.tsv
+def randomPosition(n, genome, windowSize, mode = 'even',):
     ''' Input a genome.fa file, curate random genome positions with set length of windowSize'''
     
     genomeSize = fetchSize(genome)
@@ -46,3 +47,24 @@ def compliment(seq):
     '''get compliment of sequence given input seq.'''
     ntDict = {'A': 'T', 'C': 'G', 'G': 'C', 'T':'A'}
     return ''.join([ntDict[i] for i in seq])
+
+def format_chars(seq):
+    '''
+    Color print nt sequences in interactive mode.
+    Usage:
+        format_chars{'ACGTDN'}
+    
+    '''
+    colorMap = {'A':'0.7', 'C': '-0.7', 'G': '-0.5', 'T': '-1.2', "D": '0.3',"N": '2.0'}
+    chars = [i for i in seq]
+    numbers = [colorMap[i] for i in seq]
+    
+    numbers = np.array(numbers).astype(float)
+    norm = mcolors.Normalize(vmin=-1, vmax=1)
+    cmap = cm.RdYlGn
+    colors = cmap(norm(numbers))
+    hexcolor = [mcolors.to_hex(c) for c in colors]
+    letter = lambda x: "<span style='color:{};'>{}</span>".format(x[1],x[0])
+    text = "".join(list(map(letter, zip(chars,hexcolor))))
+    text = "<div style='font-size:8pt;'>" + text
+    display(HTML(text))
