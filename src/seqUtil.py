@@ -68,3 +68,29 @@ def format_chars(seq):
     text = "".join(list(map(letter, zip(chars,hexcolor))))
     text = "<div style='font-size:8pt;'>" + text
     display(HTML(text))
+
+def getchromOrder(genome):
+    '''
+    Given a genome, get the chromosome order dictionary
+        E.g. for yeast genome, you get{'chrI': 0,
+                                     'chrII': 1,
+                                     'chrIII': 2,
+                                     'chrIV': 3,
+                                     'chrIX': 4,
+                                     'chrV': 5,
+                                     'chrVI': 6,
+                                     'chrVII': 7,
+                                     'chrVIII': 8,
+                                     'chrX': 9,
+                                     'chrXI': 10,
+                                     'chrXII': 11,
+                                     'chrXIII': 12,
+                                     'chrXIV': 13,
+                                     'chrXV': 14,
+                                     'chrXVI': 15,
+                                     'chrM': 16}
+    '''
+    
+    genome_size = fetchSize(genome)
+    chromOrder = {j:i for i, j in enumerate(genome_size.keys())}
+    return chromOrder

@@ -3,13 +3,14 @@ import numpy as np
 import random
 from seqUtil import *
 
-def getAlignedReads(sam, region, print_quer = False, print_name = False, print_ref = False, genome = '', reverse = False):
+def getAlignedReads(sam, region, print_quer = False, print_name = False, print_ref = False, print_align = False, genome = '', reverse = False):
     '''
     sam: input sam/bam file.
     region: region to fetch aligned reads.
         E.g. region = chrI:12300-12500
-    print_name: Set true to print readname.
-    print_ref: Set true to print reference sequnce. If true, must provide genome.
+    print_name: Set True to print readname.
+    print_ref: Set True to print reference sequnce. If true, must provide genome.
+    print_align: Set True to print align start and end of reads.
     genome: reference genome indexed with faidx.
     reverse: Set True to reverse compliment reads mapped to negative strands.
     '''
@@ -55,9 +56,10 @@ def getAlignedReads(sam, region, print_quer = False, print_name = False, print_r
                     if s.is_reverse:
                         alignedRead = reverseCompliment(alignedRead)
                 string = alignedRead[qpos:qpos+qrange]
-                string = alignedRead[qpos:qpos+qrange]
                 if print_quer:
                     print(string)
+                if print_align:
+                    print(alignstart, alignend)
                 out[s.query_name] = string
     return out
     samFile.close()
