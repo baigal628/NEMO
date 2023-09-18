@@ -1,6 +1,6 @@
 from seqUtil import *
 
-def parseEventAlign(eventAlign = '', outfile = '', readname = '', chrom = '', genome = ''):
+def parseEventAlign(eventAlign = '', outfile = '', readname = '', chrom = '', genome = '', print_sequence = False):
     '''
     alignScore function: Input eventalign file, for each read, the function aggregates the number of signals aligned to events with one base movement.
         E.g.    read1  ACGTGGCTGA
@@ -15,14 +15,10 @@ def parseEventAlign(eventAlign = '', outfile = '', readname = '', chrom = '', ge
                           61
                            78
                             101
-    
-    It is important to deal with deletion cases:
-    # evt: TCCGCTCCCACTTADAATGCACCGAGGTGAATTGGTDATCCTTDCGAAAATACCCAGATAGAAATGGAGTAGTTGCGTGA
-    # ref: TCCGCTCCCACTTATAATGCACCGAGGTGAATTGGTCATCCTTACGAAAATACCCAGATAGAAATGGAGTAGTTGCGTGA
-    # que: TCCGCTCCCGCDDATGATGCACCGAGGTGAATTGGTCATCCDTACGAAAATACCCAGATAGAAATGGAGTAGTTGCGTGA
     '''
     
-    outf = open(outfile, 'w')
+    if outfile:
+        outf = open(outfile, 'w')
     tag = ''
     readID = ''
     sequence = ''
@@ -31,11 +27,14 @@ def parseEventAlign(eventAlign = '', outfile = '', readname = '', chrom = '', ge
     c = 0
     
     chromOrder = getchromOrder(genome)
+    print(chromOrder)
     
     with open(eventAlign, 'r') as inFile:
         header = inFile.readline()
         for line in inFile:
             if tag == 'stop':
+                print(warn)
+                sequence = ''
                 break
             line = line.strip().split('\t')
             read = line[3]
@@ -45,10 +44,14 @@ def parseEventAlign(eventAlign = '', outfile = '', readname = '', chrom = '', ge
                 print(c)
             
             if chrom:
+                # This part is problematic if eventalign file is not ordered
                 if line[0] != chrom:
+                    print(line[0])
+                    print(chrom)
                     if chromOrder[line[0]] < chromOrder[chrom]: 
                         continue 
-                    else:
+                    elif chromOrder[line[0]] > chromOrder[chrom]:
+                        warn = 'stop by chromsome'
                         tag = 'stop'
             
             if readID != read:
@@ -60,11 +63,16 @@ def parseEventAlign(eventAlign = '', outfile = '', readname = '', chrom = '', ge
                         print(readname)
                         print(len(readname))
                         if len(readname) == 0:
+                            warn = 'stop by readname'
                             tag = 'stop'
                 if sequence:
                     # Set variables back to initial state
-                    out = "{}\t{}\t{}\t{}\t{}\t{}\n".format(readID, chromsome, eventStart, sequence, ','.join(str(i) for i in signalList), ','.join(str(i) for i in signalLengthList))
-                    outf.write(out)
+                    if print_sequence:
+                        out = "{}\t{}\t{}\t{}\t{}\t{}\n".format(readID, chromsome, eventStart, sequence, ','.join(str(i) for i in signalList), ','.join(str(i) for i in signalLengthList))
+                    else:
+                        out = "{}\t{}\t{}\t{}\t{}\n".format(readID, chromsome, eventStart, ','.join(str(i) for i in signalList), ','.join(str(i) for i in signalLengthList))
+                    if outfile:
+                        outf.write(out)
                     readID = ''
                     sequence = ''
                     sigList = []
@@ -101,6 +109,10 @@ def parseEventAlign(eventAlign = '', outfile = '', readname = '', chrom = '', ge
                     sequence += kmer[-1]
                     signalLengthList.append(signalLength)
         if sequence:
-            out = "{}\t{}\t{}\t{}\t{}\t{}\n".format(readID, chromsome, eventStart, sequence, ','.join(str(i) for i in signalList), ','.join(str(i) for i in signalLengthList))
-            outf.write(out)
-    outf.close()
+            if print_sequence:
+                out = "{}\t{}\t{}\t{}\t{}\t{}\n".format(readID, chromsome, eventStart, sequence, ','.join(str(i) for i in signalList), ','.join(str(i) for i in signalLengthList))
+            else:
+                out = "{}\t{}\t{}\t{}\t{}\n".format(readID, chromsome, eventStart, ','.join(str(i) for i in signalList), ','.join(str(i) for i in signalLengthList))
+            if outfile:
+                outf.write(out)
+                outf.close()
