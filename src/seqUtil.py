@@ -1,7 +1,7 @@
 import pysam
 import numpy
 import random
-from IPython.display import display, HTML
+# from IPython.display import display, HTML
 
 def fetchSize(genome):
     '''Input a genome.fa file, get the chromsome bounderies.'''
@@ -40,12 +40,12 @@ def randomPosition(n, genome, windowSize, mode = 'even',):
 
 def reverseCompliment(seq):
     '''get reverse compliment of sequence given input seq.'''
-    ntDict = {'A': 'T', 'C': 'G', 'G': 'C', 'T':'A'}
+    ntDict = {'A': 'T', 'C': 'G', 'G': 'C', 'T':'A', 'D':'D', 'N':'N'}
     return ''.join([ntDict[i] for i in seq[::-1]])
 
 def compliment(seq):
     '''get compliment of sequence given input seq.'''
-    ntDict = {'A': 'T', 'C': 'G', 'G': 'C', 'T':'A'}
+    ntDict = {'A': 'T', 'C': 'G', 'G': 'C', 'T':'A', 'D':'D', 'N':'N'}
     return ''.join([ntDict[i] for i in seq])
 
 def format_chars(seq):
@@ -94,3 +94,19 @@ def getchromOrder(genome):
     genome_size = fetchSize(genome)
     chromOrder = {j:i for i, j in enumerate(genome_size.keys())}
     return chromOrder
+
+def baseCount(seq, base):
+    count = 0
+    for nt in seq:
+        if nt == base:
+            count+=1
+    return count
+
+def basePos(seq, base):
+    pos = []
+    i = 0
+    for nt in seq:
+        if nt == base:
+            pos.append(i)
+        i +=1
+    return pos

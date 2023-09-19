@@ -3,7 +3,7 @@ import numpy as np
 import random
 from seqUtil import *
 
-def getAlignedReads(sam, region, print_quer = False, print_name = False, print_ref = False, print_align = False, genome = '', reverse = False):
+def getAlignedReads(sam, region, print_quer = False, print_name = False, print_ref = False, print_align = False, genome = '', reverse = True):
     '''
     sam: input sam/bam file.
     region: region to fetch aligned reads.
@@ -34,6 +34,7 @@ def getAlignedReads(sam, region, print_quer = False, print_name = False, print_r
     for s in samFile.fetch(chrom, qstart, qend):
         if not s.is_secondary and not s.is_supplementary:
             alignstart, alignend = s.reference_start, s.reference_end
+            strand = 0
             if alignstart <= qstart and alignend >= qend:
                 seq = s.query_sequence
                 # cigar is relative to the query sequence, which reflects the bases in reference seq.
@@ -55,11 +56,14 @@ def getAlignedReads(sam, region, print_quer = False, print_name = False, print_r
                 if reverse:
                     if s.is_reverse:
                         alignedRead = reverseCompliment(alignedRead)
+                        strand = -1
+                    else:
+                        strand = 0
                 string = alignedRead[qpos:qpos+qrange]
                 if print_quer:
                     print(string)
                 if print_align:
-                    print(alignstart, alignend)
-                out[s.query_name] = string
+                    print(alignstart, alignend, strand)
+                out[s.query_name] = (string,strand)
     return out
     samFile.close()
