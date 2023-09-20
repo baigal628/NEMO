@@ -58,7 +58,7 @@ def getAlignedReads(sam, region, print_quer = False, print_name = False, print_r
                         alignedRead = reverseCompliment(alignedRead)
                         strand = -1
                     else:
-                        strand = 0
+                        strand = 1
                 string = alignedRead[qpos:qpos+qrange]
                 if print_quer:
                     print(string)

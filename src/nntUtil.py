@@ -8,9 +8,8 @@ from nanopore_dataset import create_splits
 from nanopore_dataset import load_csv
 from nanopore_dataset import NanoporeDataset
 from resnet1d import ResNet1D
+
 from seqUtil import *
-from bamUtil import *
-from nanoUtil import *
 
 device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 
@@ -25,9 +24,6 @@ resnet1D = ResNet1D(
             downsample_gap=2,
             increasefilter_gap=4,
             use_do=False)
-
-DDSEQ_FN = './nanopore_classification/best_models/addseq_resnet1d.pt'
-MESMLR_FN = './nanopore_classification/best_models/mesmlr_resnet1d.pt'
 
 def nntPredict(signals, device, model, weights_path, sigWindow = 400, method = 'mean'):
     '''
@@ -50,9 +46,10 @@ def nntPredict(signals, device, model, weights_path, sigWindow = 400, method = '
         probs.append(prob)
     return np.mean(probs)
 
+
 def modelScores(refSeq, sigList, siglenList, sigStart,
                 device, model, weights_path, outfile = '', 
-                kmerWindow = 80, sigWindow = 400, modbase = 'A'):
+                kmerWindow = 80, sigWindow = 400, modbase = ''):
     
     outFh = open(outfile, 'w')
     
