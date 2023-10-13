@@ -2,19 +2,24 @@ from seqUtil import *
 
 def parseEventAlign(eventAlign = '', outfile = '', readname = '', chrom = '', genome = '', print_sequence = False, n_rname = 0):
     '''
-    parseEventAlign function: Input eventalign file, for each read, the function aggregates the number of signals aligned to events with one base movement.
-        E.g.    read1  ACGTGGCTGA
-                events ACGTG
-                        CGTGG
-                         GTGGC
-                          TGGCT
-                           GGCTG
-                            GCTGA
-                sigLen  23
-                         45
-                          61
-                           78
-                            101
+    This function reads nanopolish eventalign file, aggregates signals and the number of 
+    signals correspinding to one base movement for read in readname list.
+    
+    input:
+    output: _siganlAlign.tsv with format: readname\tchrom\teventStart(reference)\tsigList\tsigLenLsit
+
+    E.g.    read1  ACGTGGCTGA
+            events ACGTG
+                    CGTGG
+                     GTGGC
+                      TGGCT
+                       GGCTG
+                        GCTGA
+            sigLen  23
+                     45
+                      61
+                       78
+                        101
     '''
     readname = set(readname)
     if outfile:
@@ -31,6 +36,7 @@ def parseEventAlign(eventAlign = '', outfile = '', readname = '', chrom = '', ge
             line = line.strip().split('\t')
             thisread = line[3]
             thischrom = line[0]
+            
             c+=1
             if c%10000000 == 0:
                 print(c/1000000, ' M lines have passed.')
@@ -57,9 +63,8 @@ def parseEventAlign(eventAlign = '', outfile = '', readname = '', chrom = '', ge
                     sigLenList = []
                 
                 if thisread in readname:
-                    print(readname)
                     readname.remove(thisread)
-                    print(len(readname))
+                    print(len(readname), ' reads left in readname list')
                 else:
                     continue
                 
@@ -108,7 +113,12 @@ def parseEventAlign(eventAlign = '', outfile = '', readname = '', chrom = '', ge
 
 def parseSigAlign(sigAlign, pStart, pEnd, kmerWindow = 80):
     '''
-    pStart on reference genome aligns to sigLenList[pStart-eventStart-1] on signalList.
+    This function is a iterator that reads _siganlAlign.tsv file, and output readID sigList, sigLenList, and sigStart
+
+    pStart: start position of region on reference genome
+    pEnd: end position of region on reference genome
+    sigStart: signal position 
+    reference genome aligns to sigLenList[pStart-eventStart-1] on signalList.
     012345678
     accGTCGAa 
     sigList = [00,01,02,03,04,05,..]
