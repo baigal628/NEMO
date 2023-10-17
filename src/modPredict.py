@@ -13,8 +13,8 @@ ADDSEQ_FN = '/private/groups/brookslab/gabai/tools/seqUtils/src/nanopore_classif
 MESMLR_FN = '/private/groups/brookslab/gabai/tools/seqUtils/src/nanopore_classification/best_models/mesmlr_resnet1d.pt'
 
 def modPredict(bam, event, region, genome, prefix = '', modification = 'addseq', model = 'resnet1D', sigAlign = '', method = 'median',
-               outPath = '/private/groups/brookslab/gabai/projects/Add-seq/data/ctrl/eventalign/predictMod', mbase = 'A',
-               n_rname = 3):
+               outPath = '/private/groups/brookslab/gabai/projects/Add-seq/data/ctrl/predictMod/', mbase = 'A',
+               n_rname = 0):
     '''
     Given bam file and event align file, do modification prediction on all modifiable bases.
     Input:
@@ -56,7 +56,7 @@ def modPredict(bam, event, region, genome, prefix = '', modification = 'addseq',
     
     reg = myregion.split(':')
     chrom, pStart, pEnd = reg[0], int(reg[1].split('-')[0]), int(reg[1].split('-')[1])
-    
+    initial_time = time.time()
     print('Start parsing bam file to get reads aligned to the region......')
     alignment = getAlignedReads(sam = bam, region = myregion, genome=genome, print_name=False)
     rname = list(alignment.keys())
@@ -65,7 +65,7 @@ def modPredict(bam, event, region, genome, prefix = '', modification = 'addseq',
     if not sigAlign:
         print('Start parsing eventalign file to map signals to the list......')
         sigAlign_output = outPath + prefix + '_' + myregion + 'siganlAlign.tsv'
-        parseEventAlign(eventAlign = event, readname = rname[1:], genome=genome, chrom=chrom, n_rname = n_rname,
+        parseEventAlign(eventAlign = event, readname = rname[1:], chr_region=chrom, n_rname = n_rname,
                     outfile = sigAlign_output)
         print('done with reading eventalign file.')
         print('Output signalAlign file saved in:\n', sigAlign_output)
@@ -76,13 +76,13 @@ def modPredict(bam, event, region, genome, prefix = '', modification = 'addseq',
     print('Start parsing sigalign file......')
     modScore_output = outPath + prefix + '_' + myregion + 'modScores.tsv'
     modScore_outF = open(modScore_output, 'w')
-    for readID, sigList, siglenList, sigStart in parseSigAlign(sigAlign=sigAlign_output, pStart=pStart, pEnd=pEnd):
+    for readID, eventStart, sigList, siglenList in parseSigAlign(sigAlign=sigAlign_output):
         start_time = time.time()
         print('Start processing ', readID)
-        
-        modScores = assign_scores(readID=readID, sigList=sigList, siglenList=siglenList, sigStart=sigStart, modbase= 'A', 
-                                  alignemnt=alignment, model= mymodel, weights = myweights, device = device,tune=False, method = method)
-        
+        sigLenList_init = pStart-eventStart-1
+        modScores = assign_scores(readID=readID, sigList=sigList, siglenList=siglenList, sigLenList_init=sigLenList_init, modbase= 'A', 
+                                  alignemnt=alignment, model= mymodel, weights = myweights, device = device, tune=False, method = method)
+
         out = '{readID}\t{chrom}\t{pStart}\t{pEnd}\t{prob}'.format(readID=readID, chrom = chrom, pStart=pStart, pEnd=pEnd, prob=str(modScores))
         modScore_outF.write(out)
         
@@ -90,3 +90,5 @@ def modPredict(bam, event, region, genome, prefix = '', modification = 'addseq',
         print('Processed read ', readID, ' in ', end_time - start_time, 's')
         print('Output signalAlign file saved in:\n', modScore_output)
     modScore_outF.close()
+    total_time = time.time() - initial_time
+    print('Finished all analysis in ', total_time, 's.')

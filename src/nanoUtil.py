@@ -1,12 +1,20 @@
 from seqUtil import *
 
-def parseEventAlign(eventAlign = '', outfile = '', readname = '', chrom = '', genome = '', print_sequence = False, n_rname = 0):
+def parseEventAlign(eventAlign = '', outfile = '', readname = '', chr_region = '', print_sequence = False, n_rname = 0, header = True):
     '''
     This function reads nanopolish eventalign file, aggregates signals and the number of 
     signals correspinding to one base movement for read in readname list.
     
     input:
-    output: _siganlAlign.tsv with format: readname\tchrom\teventStart(reference)\tsigList\tsigLenLsit
+        eventAlign: nanopolish eventalign output file.
+        readname: A list containing readnames.
+        chr_region: chromosome number that region of interest falls in.
+    optional:
+        print_sequence: if True, kmer sequence will be included in outfile.
+        n_rname: number of readnames can be skipped in the readname list (default: 0).
+                 Searching all the readnames from the eventalign file takes longer time.
+    output: 
+        outfile: siganlAlign.tsv with format: readname\tchrom\teventStart(reference)\tsigList\tsigLenLsit
 
     E.g.    read1  ACGTGGCTGA
             events ACGTG
@@ -28,22 +36,20 @@ def parseEventAlign(eventAlign = '', outfile = '', readname = '', chrom = '', ge
     read = ''
     sequence = ''
     c = 0
-    readok = False
     
     with open(eventAlign, 'r') as inFile:
-        header = inFile.readline()
+        if header:
+            header = inFile.readline()
         for line in inFile:
             line = line.strip().split('\t')
             thisread = line[3]
             thischrom = line[0]
-            
             c+=1
             if c%10000000 == 0:
                 print(c/1000000, ' M lines have passed.')
 
-            if thischrom != chrom:
+            if thischrom != chr_region:
                 continue
-
             # all line passed the chromosome and readname check should start here
             if thisread != read:
                 if sequence:
@@ -57,6 +63,7 @@ def parseEventAlign(eventAlign = '', outfile = '', readname = '', chrom = '', ge
                     if len(readname) <= n_rname:
                         sequence = ''
                         break
+                    
                     read = ''
                     sequence = ''
                     sigList = []
@@ -67,7 +74,7 @@ def parseEventAlign(eventAlign = '', outfile = '', readname = '', chrom = '', ge
                     print(len(readname), ' reads left in readname list')
                 else:
                     continue
-                
+
                 # start new read here
                 read = thisread
                 chrom = thischrom
@@ -80,7 +87,6 @@ def parseEventAlign(eventAlign = '', outfile = '', readname = '', chrom = '', ge
                 sigLen = len(sigList)
                 sigLenList = [sigLen]
                 sequence = kmer
-
             # next kmer within the same read
             else:
                 signals = [float(i) for i in line[-1].split(',')]
@@ -89,8 +95,7 @@ def parseEventAlign(eventAlign = '', outfile = '', readname = '', chrom = '', ge
                 # signalLength records the number of signals for one base movement
                 sigLen += len(signals)
 
-                # check if this is a different kmer ot the same kmer
-                # line[1]: this kmer start, line[2]: this kmer
+                # If different kmer
                 if (line[1], line[2]) != (start, kmer):
                     deletion = int(line[1]) - int(start) - 1
                     # id there is a deletion in eventalign file
@@ -102,16 +107,20 @@ def parseEventAlign(eventAlign = '', outfile = '', readname = '', chrom = '', ge
                     kmer = line[2]
                     sequence += kmer[-1]
                     sigLenList.append(sigLen)
+                # If same kmer
+                else:
+                    # Update the number of signals matched to previous kmer
+                    sigLenList[-1]=sigLen
         if sequence:
             if print_sequence:
-                out = "{}\t{}\t{}\t{}\t{}\t{}\n".format(read, chromsome, eventStart, sequence, ','.join(str(i) for i in sigList), ','.join(str(i) for i in sigLenList))
+                out = "{}\t{}\t{}\t{}\t{}\t{}\n".format(read, chrom, eventStart, sequence, ','.join(str(i) for i in sigList), ','.join(str(i) for i in sigLenList))
             else:
-                out = "{}\t{}\t{}\t{}\t{}\n".format(read, chromsome, eventStart, ','.join(str(i) for i in sigList), ','.join(str(i) for i in sigLenList))
+                out = "{}\t{}\t{}\t{}\t{}\n".format(read, chrom, eventStart, ','.join(str(i) for i in sigList), ','.join(str(i) for i in sigLenList))
             if outfile:
                 outf.write(out)
     outf.close()
 
-def parseSigAlign(sigAlign, pStart, pEnd, kmerWindow = 80):
+def parseSigAlign(sigAlign):
     '''
     This function is a iterator that reads _siganlAlign.tsv file, and output readID sigList, sigLenList, and sigStart
 
@@ -132,11 +141,8 @@ def parseSigAlign(sigAlign, pStart, pEnd, kmerWindow = 80):
             line = line.strip().split('\t')
             readID = line[0]
             eventStart = int(line[2])
-            prange= pEnd-pStart
             sigList = line[3].split(',')
             siglenList = line[4].split(',')
             
             # This will output within prange, the 80bp kmer window with it's scores
-            sigStart = pStart - eventStart -1
-            
-            yield(readID, sigList, siglenList, sigStart)
+            yield(readID, eventStart, sigList, siglenList, )
