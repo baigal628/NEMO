@@ -12,7 +12,7 @@ print('Device type: ', device)
 ADDSEQ_FN = '/private/groups/brookslab/gabai/tools/seqUtils/src/nanopore_classification/best_models/addseq_resnet1d.pt'
 MESMLR_FN = '/private/groups/brookslab/gabai/tools/seqUtils/src/nanopore_classification/best_models/mesmlr_resnet1d.pt'
 
-def modPredict(bam, event, region, genome, prefix = '', modification = 'addseq', model = 'resnet1D', sigAlign = '', method = 'median',
+def modPredict(bam, event, region, genome, prefix = '', modification = 'addseq', modbase = 'A', model = 'resnet1D', sigAlign = '', method = 'median',
                outPath = '/private/groups/brookslab/gabai/projects/Add-seq/data/ctrl/predictMod/', mbase = 'A',
                n_rname = 0):
     '''
@@ -54,11 +54,15 @@ def modPredict(bam, event, region, genome, prefix = '', modification = 'addseq',
     mymodel = models[model]
     myweights = weights[modification]
     
+    print('Predicting on region: ', myregion)
     reg = myregion.split(':')
     chrom, pStart, pEnd = reg[0], int(reg[1].split('-')[0]), int(reg[1].split('-')[1])
+    
     initial_time = time.time()
     print('Start parsing bam file to get reads aligned to the region......')
     alignment = getAlignedReads(sam = bam, region = myregion, genome=genome, print_name=False)
+    refSeq = alignment['ref']
+    modPositions = basePos(refSeq, base = modbase)
     rname = list(alignment.keys())
     print('done with bam file.')
     
@@ -76,14 +80,21 @@ def modPredict(bam, event, region, genome, prefix = '', modification = 'addseq',
     print('Start parsing sigalign file......')
     modScore_output = outPath + prefix + '_' + myregion + 'modScores.tsv'
     modScore_outF = open(modScore_output, 'w')
+    
+    # Relative position to pStart on reference genome:
+    modScore_outF.write('#Positions\t' + ','.join(str(i) for i in modPositions)+ '\n')
+    
     for readID, eventStart, sigList, siglenList in parseSigAlign(sigAlign=sigAlign_output):
         start_time = time.time()
         print('Start processing ', readID)
+        strand = alignment[readID][1]
         sigLenList_init = pStart-eventStart-1
-        modScores = assign_scores(readID=readID, sigList=sigList, siglenList=siglenList, sigLenList_init=sigLenList_init, modbase= 'A', 
-                                  alignemnt=alignment, model= mymodel, weights = myweights, device = device, tune=False, method = method)
-
-        out = '{readID}\t{chrom}\t{pStart}\t{pEnd}\t{prob}'.format(readID=readID, chrom = chrom, pStart=pStart, pEnd=pEnd, prob=str(modScores))
+        if sigLenList_init > len(siglenList):
+            continue
+        scores = assign_scores(strand=strand, refSeq = refSeq, modPositions=modPositions, sigList=sigList, siglenList=siglenList, sigLenList_init=sigLenList_init,
+                               weights = myweights, model= mymodel, device = device, tune=False, method = method)
+        probs = ','.join(str(i) for i in scores)
+        out = '{readID}\t{chrom}\t{strand}\t{pStart}\t{pEnd}\t{probs}\n'.format(readID=readID, chrom = chrom, strand = strand, pStart=pStart, pEnd=pEnd, probs=probs)
         modScore_outF.write(out)
         
         end_time = time.time()

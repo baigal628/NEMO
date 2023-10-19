@@ -60,13 +60,10 @@ def tune_siganl(sigList, min_val=50, max_val=130):
     new_sigList = [max(min_val, min(max_val, float(signal))) for signal in sigList]
     return new_sigList
 
-def assign_scores(readID, sigList, siglenList, sigLenList_init, modbase, alignemnt, 
-                  weights, model, device, 
-                  tune = False, method = 'median', kmerWindow=80, signalWindow=400):
+def assign_scores(strand, refSeq, modPositions, sigList, siglenList, sigLenList_init,
+                  weights, model, device, tune = False, method = 'median', kmerWindow=80, signalWindow=400):
     
-    refSeq = alignemnt['ref']
     # Position of As, relative to the reference
-    modPositions = basePos(refSeq, base = modbase)
     modScores = {i:[] for i in modPositions}
     
     for pos in range(len(refSeq)):
@@ -110,10 +107,12 @@ def assign_scores(readID, sigList, siglenList, sigLenList_init, modbase, alignem
             modPosition = modPositions[p]
             # 4.1 Tune signals based on position of A and A content:
             if tune:
-                strand = alignemnt[readID][1]
+                strand = strand
                 prob = model_scores(prob, modPosition, pos, modbase_count, strand)
             modScores[modPosition].append(prob)
     
+    scores = []
     for mod in modScores:
-        modScores[mod] = aggregate_scors(modScores[mod], method = method)
-    return modScores
+        score = aggregate_scors(modScores[mod], method = method)
+        scores .append(score)
+    return scores

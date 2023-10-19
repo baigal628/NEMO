@@ -3,7 +3,8 @@ import numpy as np
 import random
 from seqUtil import *
 
-def getAlignedReads(sam, region, print_quer = False, print_name = False, print_ref = False, print_align = False, genome = '', reverse = True):
+def getAlignedReads(sam, region, print_quer = False, print_name = False, print_ref = False, 
+                    print_align = False, genome = '', reverse = True):
     '''
     sam: input sam/bam file.
     region: region to fetch aligned reads.
