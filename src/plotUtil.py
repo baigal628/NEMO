@@ -1,7 +1,11 @@
+import matplotlib.pyplot as plt
+import matplotlib.patches as mplpatches
 import numpy as np
 from sklearn.cluster import KMeans
+from sklearn.impute import SimpleImputer
+from collections import defaultdict 
 
-def readGTF(gtfFile, chromPlot, startPlot, endPlot, features = ['exon', 'CDS']):
+def readGTF(gtfFile, chromPlot, startPlot, endPlot, genePlot, features):
 
     gtfReads = {}
     gene = ''
@@ -9,8 +13,8 @@ def readGTF(gtfFile, chromPlot, startPlot, endPlot, features = ['exon', 'CDS']):
 
     with open(gtfFile) as gtfFh:
         for line in gtfFh:
-            if '##' in line:
-                pass
+            if '#!' in line:
+                continue
             else:
                 line = line.split('\t')
                 chrom = str(line[0])
@@ -18,10 +22,14 @@ def readGTF(gtfFile, chromPlot, startPlot, endPlot, features = ['exon', 'CDS']):
                 end = int(line[4])
                 feature = line[2]
                 if chrom != chromPlot:
-                    pass
+                    continue
                 else:
                     if feature in features:
-                        geneID = line[8].split(';')[0].split('gene_id "')[1].split('"')[0]
+                        splitPoint = str(genePlot) + ' "'
+                        transcript = line[8].split(';')[3]
+                        if splitPoint not in transcript:
+                            continue
+                        geneID = transcript.split(splitPoint)[1].split('"')[0]
                         # New gene
                         if geneID != gene:
                         # Store the previous genecript
@@ -63,7 +71,6 @@ def readGTF(gtfFile, chromPlot, startPlot, endPlot, features = ['exon', 'CDS']):
     sorted_gtfReads = dict(sorted(gtfReads.items(), key = lambda x:x[1]['start']))
     return (features, sorted_gtfReads)
 
-
 def collectScores(modScores):
     '''
     collectScores reads modScores as input and format reads, modified positions and 
@@ -71,73 +78,74 @@ def collectScores(modScores):
     '''
     
     with open(modScores, 'r') as msFh:
-        readnames, mtxs = {-1:[], 1:[]}, {-1:[], 1:[]}
+        readnames, mtxs = defaultdict(list), defaultdict(list) 
         positions = [int(p) for p in msFh.readline().strip().split('\t')[1].split(',')]       
         for line in msFh:
             line = line.strip().split('\t')
             strand = int(line[2])
             readnames[strand].append(line[0])
             mtxs[strand].append(line[5].split(','))
-    for s in (-1,1):
+    for s in mtxs:
         mtxs[s] = np.array(mtxs[s], dtype = float)
     
-    return mtxs, readnames, positions
+    return dict(mtxs), dict(readnames), positions
 
 
-def clusterRead(mtxs, readnames, outpath, prefix, n_clusters=2, show_elbow = False, return_cluster = True):
+def clusterRead(mtx, readname, outpath, prefix, strand, n_clusters, 
+                show_elbow = False, return_cluster = True, print_inertia = False, print_iterations = False):
     
-    outfile = open(outpath + prefix + '_clustering.tsv', 'w')
+    
+    outfile = open(outpath + prefix  +'_clustering' + str(strand) + '.tsv', 'w')
     outfile.write('readID\tcluster\n')
-    labels={}
     imp = SimpleImputer(missing_values=np.nan, strategy='mean')
 
-    for strand in readnames:
-        readname = readnames[strand]
+    print('Imputing missing values...')
+    score_mtx = imp.fit_transform(mtx)
+
+    if show_elbow:
         n_reads = len(readname)
-        
-        print('Imputing missing values...')
-        score_mtx = imp.fit_transform((mtxs[strand]))
+        inertias = []
 
-        if show_elbow:
-            inertias = []
+        for i in range(1, n_reads+1):
+            kmeans = KMeans(n_clusters=i)
+            kmeans.fit(score_mtx)
+            inertias.append(kmeans.inertia_)
 
-            for i in range(1, n_reads+1):
-                kmeans = KMeans(n_clusters=i)
-                kmeans.fit(score_mtx)
-                inertias.append(kmeans.inertia_)
+        plt.plot(range(1,n_reads+1), inertias, marker='o')
+        plt.title('Elbow method')
+        plt.xlabel('Number of clusters')
+        plt.ylabel('Inertia')
+        plt.show()
 
-            plt.plot(range(1,n_reads+1), inertias, marker='o')
-            plt.title('Elbow method')
-            plt.xlabel('Number of clusters')
-            plt.ylabel('Inertia')
-            plt.show()
+    kmeans = KMeans(
+        init="random",
+        n_clusters=n_clusters,
+        n_init=10,
+        max_iter=300,
+        random_state=42)
 
-        kmeans = KMeans(
-            init="random",
-            n_clusters=n_clusters,
-            n_init=10,
-            max_iter=300,
-            random_state=42)
-
-        kmeans.fit(score_mtx)
+    kmeans.fit(score_mtx)
+    if print_inertia:
         print('inertia: ', kmeans.inertia_)
+    if print_iterations:
         print('iterations: ', kmeans.n_iter_)
-        
-        classification = kmeans.labels_
-        for k,v in zip(readname, classification):
-            line = '{}\t{}\t{}\n'.format(k, strand, v)
-            outfile.write(line)
-        labels[strand] = classification
-    
-    outfile.close()
-    if return_cluster:
-        return labels
-    
 
-def plotGtfTrack(plot, gtfFile, chromPlot, startPlot, endPlot):
+    for k,v in zip(readname, kmeans.labels_):
+        line = '{}\t{}\t{}\n'.format(k, strand, v)
+        outfile.write(line)
+    outfile.close()
     
-    features, sorted_gtfReads = readGTF(gtfFile, chromPlot = chromPlot, 
-                                        startPlot = startPlot, endPlot = endPlot)
+    if return_cluster:
+        return kmeans.labels_
+
+def plotGtfTrack(plot, gtfFile, chromPlot, startPlot, endPlot,
+                 features = ['CDS', 'start_codon'], adjust_features = [0, 0.25],
+                 label_name = True, label_direction = False, colorpalates= ['orange', 'blue'], 
+                 thinHeight = 0.2, thickHeight = 0.8, line_width = 0):
+    
+    features, sorted_gtfReads = readGTF(gtfFile, chromPlot = chromPlot.split('chr')[1], 
+                                        genePlot = 'gene_name',
+                                        startPlot = startPlot, endPlot = endPlot, features = features)
     
     print('plotting gene annotations...')
     
@@ -152,118 +160,126 @@ def plotGtfTrack(plot, gtfFile, chromPlot, startPlot, endPlot):
                 bottom = y
                 yRightMost[y] = end
                 break
-            elif start >= yRightMost[y]:
+            elif start >= yRightMost[y]+1500:
                 bottom = y
                 yRightMost[y] = end
                 break
             else:
                 y +=1
-        thinheight = 0.05
-        line_width = 0
-        rectangle = mplpatches.Rectangle([start, bottom-(thinheight/2)], end - start, thinheight,
+        rectangle = mplpatches.Rectangle([start, bottom-(thinHeight/2)], end - start, thinHeight,
                                         facecolor = 'grey',
                                         edgecolor = 'black',
                                         linewidth = line_width)
+        if label_name:
+            plot.text(x = start-1, y = bottom, s = transID, ha = 'right', va = 'center', size = 'small')
+            
         plot.add_patch(rectangle)
+        
+        # plot feature1
         if features[0] in sorted_gtfReads[transID]:
-            Height = 0.25
-            blockStarts = np.array(sorted_gtfReads[transID]['exon'][0], dtype  = int)
-            blockEnds = np.array(sorted_gtfReads[transID]['exon'][1], dtype = int)
+            blockStarts = np.array(sorted_gtfReads[transID][features[0]][0], dtype  = int)
+            blockEnds = np.array(sorted_gtfReads[transID][features[0]][1], dtype = int)
             for index in range(len(blockStarts)):
                 blockStart = blockStarts[index]
                 blockEnd = blockEnds[index]
-                rectangle = mplpatches.Rectangle([blockStart, bottom-(Height/2)], blockEnd-blockStart, Height,
-                                    facecolor = 'blue',
+                rectangle = mplpatches.Rectangle([blockStart-adjust_features[0], bottom-(thickHeight/2)],
+                                                 blockEnd-blockStart+adjust_features[0], thickHeight,
+                                    facecolor = colorpalates[0],
                                     edgecolor = 'black',
                                     linewidth = line_width)
                 plot.add_patch(rectangle)
+        
+        # plot feature2
         if features[1] in sorted_gtfReads[transID]:
             Height = 0.5
-            blockStarts = np.array(sorted_gtfReads[transID]['CDS'][0], dtype = int)
-            blockEnds = np.array(sorted_gtfReads[transID]['CDS'][1], dtype = int)
+            blockStarts = np.array(sorted_gtfReads[transID][features[1]][0], dtype = int)
+            blockEnds = np.array(sorted_gtfReads[transID][features[1]][1], dtype = int)
             for index in range(0, len(blockStarts), 1):
                 blockStart = blockStarts[index]
                 blockEnd = blockEnds[index]
-                rectangle = mplpatches.Rectangle([blockStart, bottom-(Height/2)], blockEnd-blockStart, Height,
-                                    facecolor = 'orange',
+                rectangle = mplpatches.Rectangle([blockStart-adjust_features[1], bottom-(thickHeight/2)], 
+                                                 blockEnd-blockStart+adjust_features[1], thickHeight,
+                                    facecolor = colorpalates[1],
                                     edgecolor = 'black',
                                     linewidth = line_width)
                 plot.add_patch(rectangle)
-
+    
     plot.set_xlim(startPlot, endPlot)
     plot.set_ylim(-1,3)
+    plot.tick_params(bottom=False, labelbottom=False,
+                   left=False, labelleft=False,
+                   right=False, labelright=False,
+                   top=False, labeltop=False)
 
-def plotModTrack(plot, startPlot, endPlot, modScores, cluster = True, n_clusters = 3, 
-                 outpath = '',
-                 prefix = '',
-                 col = {'modT': 'orangered', 'modF':'dodgerblue', 'unMod': 'lightgrey'}, 
-                 height = 0.8, width = 1, line_width = 0, threashold = 0.6):
+def plotModTrack(plot, startPlot, endPlot, modScores, cluster = True, n_clusters = 3, threashold = 0.6,
+                 outpath = '', prefix = '', annot = '', label_strand = True, label_rname = False,
+                 colorPalate = {'modT': 'orangered', 'modF':'dodgerblue', 'unMod': 'lightgrey'}, 
+                 height = 0.8, width = 1, line_width = 0, ylim = ''):
     
     print('Reading modScore files...')
     mtxs, readnames, positions = collectScores(modScores)
-    sorted_readIdx_for ,sorted_readIdx_rev = readnames[1], readnames[-1]
-    
-    try:
-        assert score_mtx.shape == (len(readnames), len(positions))
-    except:
-        print('dimention of score matrix does not match readnames and positions length!')
-    
-    if cluster:
-        print("clustering reads...")
-        labels = clusterRead(mtxs = mtxs,  readnames = readnames, outpath = outpath, 
-                             prefix = prefix, n_clusters=3, show_elbow = False)
-        
-        sorted_readIdx_for = [x for _, x in sorted(zip(labels[1],np.arange(0,len(readnames[1]))))]
-        sorted_readIdx_rev = [x for _, x in sorted(zip(labels[-1],np.arange(0,len(readnames[-1]))))]
-    
-    print('plotting modification track')
-    colorPalate = col
+    tick_strand, tick_rname, tick_yaxis = [], [], []
+    strandDict = {-1:'-', 1: '+'}
     bottom = 0
     
-    print('plotting forward')
-    for readIdx in sorted_readIdx_for:
-    
-        rectangle = mplpatches.Rectangle([startPlot, bottom-(height/2)], endPlot, height,
-                                facecolor = colorPalate['unMod'],
-                                edgecolor = 'grey',
-                                linewidth = line_width)
-        plot.add_patch(rectangle)
-        for posIdx in range(len(positions)):
-            if mtxs[1][readIdx,posIdx] >= threashold:
-                color = colorPalate['modT']
-            else:
-                color = colorPalate['modF']
-
-            left = positions[posIdx]+startPlot
-            rectangle = mplpatches.Rectangle([left, bottom-(height/2)], width, height, 
-                                             facecolor = color, edgecolor = 'grey', linewidth = line_width)
-            plot.add_patch(rectangle)
-            plot.text(x = startPlot-1, y = bottom, s = '+', ha = 'right')
-            plot.text(x = startPlot-2, y = bottom, s = readnames[1][readIdx], ha = 'right')
-        bottom +=1
-    
-    print('plotting reverse')
-    for readIdx in sorted_readIdx_rev:
-    
-        rectangle = mplpatches.Rectangle([startPlot, bottom-(height/2)], endPlot, height,
-                                facecolor = colorPalate['unMod'],
-                                edgecolor = 'grey',
-                                linewidth = line_width)
-        plot.add_patch(rectangle)
+    for strand in mtxs:
+        mtx, readname = mtxs[strand], readnames[strand]
         
-        for posIdx in range(len(positions)):
-            if mtxs[-1][readIdx,posIdx] >= threashold:
-                color = colorPalate['modT']
-            else:
-                color = colorPalate['modF']
+        try:
+            assert mtx.shape == (len(readname), len(positions))
+        except:
+            print('dimention of score matrix does not match readname and position length!')
 
-            left = positions[posIdx]+startPlot
-            rectangle = mplpatches.Rectangle([left, bottom-(height/2)], width, height, 
-                                             facecolor = color, edgecolor = 'grey', linewidth = line_width)
+        
+        sorted_readIdx = readname
+
+        if cluster:
+            print("clustering reads...")
+            label = clusterRead(mtx = mtx, readname = readname, outpath = outpath, 
+                                 prefix = prefix, strand = strand, n_clusters=n_clusters, show_elbow = False)
+            sorted_readIdx = [x for _, x in sorted(zip(label, np.arange(0,len(readname))))]
+        print('plotting modification track on', strandDict[strand], 'strand...')
+        
+        for readIdx in sorted_readIdx:
+
+            rectangle = mplpatches.Rectangle([startPlot, bottom-(height/2)], endPlot, height,
+                                    facecolor = colorPalate['unMod'],
+                                    edgecolor = 'grey',
+                                    linewidth = line_width)
+            
             plot.add_patch(rectangle)
-            plot.text(x = startPlot-1, y = bottom, s = '-', ha = 'right')
-            plot.text(x = startPlot-2, y = bottom, s = readnames[-1][readIdx], ha = 'right')
-        bottom +=1
 
+            tick_yaxis.append(bottom)
+
+            if label_strand:
+                tick_strand.append(strandDict[strand])
+            if label_rname:
+                tick_rname.append(readname[readIdx])
+
+            for posIdx in range(len(positions)):
+                if mtx[readIdx,posIdx] >= threashold:
+                    color = colorPalate['modT']
+                else:
+                    color = colorPalate['modF']
+
+                left = positions[posIdx]+startPlot
+                rectangle = mplpatches.Rectangle([left, bottom-(height/2)], width, height, 
+                                                 facecolor = color, edgecolor = 'grey',
+                                                 linewidth = line_width)
+                plot.add_patch(rectangle)
+            bottom +=1
+    
+    print('finished plotting file: ', modScores)
     plot.set_xlim(startPlot, endPlot)
-    plot.set_ylim(-1,len(readnames))
+    plot.set_ylabel(annot)
+    if not ylim:
+        plot.set_ylim(-1,len(tick_yaxis))
+    else:
+        plot.set_ylim(ylim[0], ylim[1])
+    
+    plot.tick_params(bottom=False, labelbottom=False,
+                   left=True, labelleft=True,
+                   right=False, labelright=False,
+                   top=False, labeltop=False)
+    if label_strand:
+        plot.set_yticks(ticks= tick_yaxis, labels = tick_strand)

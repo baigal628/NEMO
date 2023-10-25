@@ -35,7 +35,11 @@ def modPredict(bam, event, region, genome, prefix = '', modification = 'addseq',
     nuc_regions = {
     'PHO5': 'chrII:429000-435000',
     'CLN2': 'chrXVI:66000-67550',
-    'HMR': 'chrIII:290000-299000'}
+    'HMR': 'chrIII:290000-299000',
+    'AUA1': 'chrVI:114000-116000',
+    'EMW1': 'chrXIV:45000-50000',
+    'NRG2': 'chrII:370000-379000',
+    'RDN37': 'chrXII:450300-459300'}
     
     if region in nuc_regions:
         myregion = nuc_regions[region]
