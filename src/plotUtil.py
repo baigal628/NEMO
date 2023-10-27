@@ -171,7 +171,10 @@ def plotGtfTrack(plot, gtfFile, chromPlot, startPlot, endPlot,
                                         edgecolor = 'black',
                                         linewidth = line_width)
         if label_name:
-            plot.text(x = start-1, y = bottom, s = transID, ha = 'right', va = 'center', size = 'small')
+            textStart = start
+            if start < startPlot:
+                textStart = startPlot
+            plot.text(x = textStart-1, y = bottom, s = transID, ha = 'right', va = 'center', size = 'small')
             
         plot.add_patch(rectangle)
         
@@ -283,3 +286,52 @@ def plotModTrack(plot, startPlot, endPlot, modScores, cluster = True, n_clusters
                    top=False, labeltop=False)
     if label_strand:
         plot.set_yticks(ticks= tick_yaxis, labels = tick_strand)
+
+def plotModDistribution(modPredict_pos, modPredict_neg, modPredict_chrom, return_scores = False):
+    
+    with open(modPredict_pos, 'r') as modPFh:
+        positions = [int(p) for p in modPFh.readline().strip().split('\t')[1].split(',')]       
+        pos_scores = {-1:[], 1:[]}
+        for line in modPFh:
+            line = line.strip().split('\t')
+            strand = int(line[2])
+            for score in line[5].split(','):
+                pos_scores[strand].append(float(score))
+    
+    with open(modPredict_neg, 'r') as modPFh:
+        modPFh.readline()
+        neg_scores = {-1:[], 1:[]}
+        for line in modPFh:
+            line = line.strip().split('\t')
+            strand = int(line[2])
+            for score in line[5].split(','):
+                neg_scores[strand].append(float(score))
+    
+    with open(modPredict_chrom, 'r') as modPFh:
+        modPFh.readline()
+        chrom_scores = {-1:[], 1:[]}
+        for line in modPFh:
+            line = line.strip().split('\t')
+            strand = int(line[2])
+            for score in line[5].split(','):
+                chrom_scores[strand].append(float(score))
+    
+    fig, axs = plt.subplots(nrows=2, ncols=2, sharex = True, sharey = 'row')
+    axs[0, 0].hist(pos_scores[-1], color='lightblue', bins = 30, label = 'pos', alpha=0.7)
+    axs[0, 0].hist(neg_scores[-1], color='lightpink', bins = 30, label = 'neg', alpha=0.7)
+    axs[0, 0].set_title('reverse strand cotrol')
+    axs[0, 0].legend(prop ={'size': 10})
+    axs[0, 1].hist(pos_scores[1], color='lightblue', bins = 30, label = 'pos', alpha=0.7)
+    axs[0, 1].hist(neg_scores[1], color='lightpink', bins = 30, label = 'neg', alpha=0.7)
+    axs[0, 1].set_title('forward strand control')
+
+    axs[1, 0].hist(chrom_scores[-1], color='orange', bins = 30,)
+    axs[1, 0].set_title('reverse strand chromatin')
+
+    axs[1, 1].hist(chrom_scores[1], color='orange', bins = 30,)
+    axs[1, 1].set_title('forward strand chromatin')
+    
+    if return_scores:
+        return pos_scores, neg_scores, chrom_scores, positions, fig
+    else:
+        return fig
