@@ -79,7 +79,7 @@ def assign_scores(strand, refSeq, modPositions, sigList, siglenList, sigLenList_
             start=0
         else:
             start = int(siglenList[pos_sigLenList_start])
-        if len(sigList)-start< 400:
+        if len(sigList)-start< signalWindow:
             print('Reached the end of the signal.')
             break
         end = int(siglenList[pos_sigLenList_end])
@@ -90,13 +90,13 @@ def assign_scores(strand, refSeq, modPositions, sigList, siglenList, sigLenList_
         signals = [float(s) for s in sigList[start:end+signalWindow]]
         # 3. Get predicted probability score from machine learning model
         prob = nntPredict(signals,device = device, model = model, weights_path = weights)
-        if len(signals) == 400:
+        if len(signals) == signalWindow:
             print(start, end)
             break
         # 4. Assign predicted scores to each modPosition
         # modifiable positions [1,3,4,5,7,10,15,16,21,40]
         # kmer position is 2: [2:2+22]
-        # modbase_left = 0
+        # modbase_left = 1
         # modbase_right = 9
         # modifiable position within kmer window [3,4,5,7,10,15,16,21]
         modbase_left = bisect.bisect_left(modPositions, pos)

@@ -3,7 +3,9 @@ import matplotlib.patches as mplpatches
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.impute import SimpleImputer
-from collections import defaultdict 
+from collections import defaultdict
+from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import roc_auc_score
 
 def readGTF(gtfFile, chromPlot, startPlot, endPlot, genePlot, features):
 
@@ -287,7 +289,10 @@ def plotModTrack(plot, startPlot, endPlot, modScores, cluster = True, n_clusters
     if label_strand:
         plot.set_yticks(ticks= tick_yaxis, labels = tick_strand)
 
-def plotModDistribution(modPredict_pos, modPredict_neg, modPredict_chrom, return_scores = False):
+def plotModScores(modPredict_pos, modPredict_neg, modPredict_chrom, return_scores = False):
+    '''
+    plotModDistribution reads positive, negative and chromatin modification scores from modScores.tsv files and plot histograms.
+    '''
     
     with open(modPredict_pos, 'r') as modPFh:
         positions = [int(p) for p in modPFh.readline().strip().split('\t')[1].split(',')]       
@@ -335,3 +340,217 @@ def plotModDistribution(modPredict_pos, modPredict_neg, modPredict_chrom, return
         return pos_scores, neg_scores, chrom_scores, positions, fig
     else:
         return fig
+
+def evaluatePrediction(region, sam, sigAlign, label, kmerWindow=80, signalWindow=400, 
+                       modBase = ['AT', 'TA'], genome = genome, model = mymodel, weight = myweight):
+    
+    alignment = getAlignedReads(sam = sam, region = region, genome=genome, print_name=False)
+    refSeq = alignment['ref']
+    all_scores, modCounts, modVars = defaultdict(list), defaultdict(list), defaultdict(list)
+    modPositions = basePos(refSeq, base = modBase)
+    count = baseCount(refSeq, base = modBase)
+    
+    reg = region.split(':')
+    chrom, pStart, pEnd = reg[0], int(reg[1].split('-')[0]), int(reg[1].split('-')[1])
+    
+    for readID, eventStart, sigList, siglenList in parseSigAlign(sigAlign):
+        print(readID)
+        start_time = time.time()
+        print('Start processing ', readID)
+        strand = alignment[readID][1]
+        
+        sigLenList_init = pStart-eventStart-1
+        if sigLenList_init > len(siglenList):
+            continue
+        
+        # Position of As, relative to the reference
+        modScores = {i:[] for i in modPositions}
+
+        for pos in range(len(refSeq)):
+            if pos % 500 == 0:
+                print('Predicting at position:', pos)
+
+            # 1. Fetch sequences with kmer window size, this step is optional
+            seq = refSeq[pos:pos+kmerWindow]
+            
+            # 2. Fetch signals with signal window size 
+            pos_sigLenList_start = int(sigLenList_init)+pos
+            pos_sigLenList_end = pos_sigLenList_start+1
+
+            if pos_sigLenList_start<0: 
+                start=0
+            else:
+                start = int(siglenList[pos_sigLenList_start])
+            
+            # reached the end of the signal list
+            if len(sigList)-start< signalWindow:
+                break
+            
+            end = int(siglenList[pos_sigLenList_end])
+            
+            # if no signals aligned to this position
+            if start == end:
+                continue
+            
+            signals = [float(s) for s in sigList[start:end+signalWindow]]
+            
+            # 3. Get predicted probability score from machine learning model
+            prob = nntPredict(signals, device = device, model = model, weights_path = weight)
+            
+            # 4. Assign predicted scores to each modPosition
+            # modifiable positions [1,3,4,5,7,10,15,16,21,40]
+            # kmer position is 2: [2:2+22]
+            # modbase_left = 1
+            # modbase_right = 9
+            # modifiable position within kmer window [3,4,5,7,10,15,16,21]
+            modbase_left = bisect.bisect_left(modPositions, pos)
+            modbase_right = bisect.bisect_right(modPositions, pos+kmerWindow)
+            modbase_count = modbase_right - modbase_left
+
+            #deviation of modifiable position from center point
+            mid = int((pos+kmerWindow)/2) # floor
+            # total sum of squares
+            tss = [np.square(modPos-mid) for modPos in modPositions[modbase_left:modbase_right]]
+            variation = np.sum(tss)/(len(tss)-1)
+
+            all_scores[strand].append(prob)
+            modVars[strand].append(np.sqrt(variation))
+            modCounts[strand].append(modbase_count)
+    true_labels = {}
+    for s in all_scores:
+        true_labels[s] = np.ones(len(all_scores[s]))*label
+    
+    return all_scores, modVars, modCounts, true_labels
+
+
+def plotPredictionScores(scores, modVars, modCounts, labels = ['pos', 'neg', 'chrom']):
+    
+    
+    strands = [1, -1]
+    group = 0
+    for pos in range(1,4):
+        ax = plt.subplot(4,3,pos)
+        strand = strands[0]
+        ax.margins(0.05)
+        ax.scatter(x = modCounts[group][strand], y = scores[group][strand], 
+                   s = 0.8, c = scores[group][strand], label = labels[group])
+        ax.set_title(labels[group], size = 'medium')
+        if pos ==2:
+             ax.set_title('number of modifiable positions (AT/TA) \n neg', size = 'medium')            
+        if pos == 1:
+            ax.set_ylabel('predicted \n scores (+)')
+            ax.tick_params(left = True, labelleft= True,
+                           bottom = False, labelbottom = False)
+        else:
+            ax.tick_params(left = True, labelleft= False,
+                           bottom = False, labelbottom = False)
+        ax.set_ylim(0.0, 1.0)
+        ax.set_xlim(0, 30)
+        group +=1
+    
+    group = 0
+    
+    for pos in range(4, 7):
+        ax = plt.subplot(4, 3, pos)
+        strand = strands[1]
+        ax.margins(0.05)
+        ax.scatter(x = modCounts[group][strand], y = scores[group][strand], 
+                   s = 0.8, c = scores[group][strand], label = labels[group])
+        if pos == 4:
+            ax.set_ylabel('predicted \n scores (-)')
+            ax.tick_params(left = True, labelleft= True,
+                           bottom = True, labelbottom = True)
+        elif pos == 5:
+            ax.tick_params(left = True, labelleft= False,
+                           bottom = True, labelbottom = True)
+        else:
+            ax.tick_params(left = True, labelleft= False,
+                           bottom = True, labelbottom = True)
+        ax.tick_params(left = False)
+        ax.set_ylim(0.0, 1.0)
+        ax.set_xlim(0, 30)
+        group +=1
+    
+    group = 0
+    for pos in range(7, 10):
+        ax = plt.subplot(4,3, pos)
+        strand = strands[0]
+        ax.margins(0.05)
+        ax.scatter(x = modVars[group][strand], y = scores[group][strand], 
+                   s = 0.8, c = scores[group][strand], label = labels[group])
+        if pos == 7:
+            ax.set_ylabel('predicted \n scores (+)')
+            ax.tick_params(left = True, labelleft= True,
+                           bottom = False, labelbottom = False)
+        else:
+            ax.tick_params(left = True, labelleft= False,
+                           bottom = False, labelbottom = False)
+        ax.set_ylim(0.0, 1.0)
+        ax.set_xlim(0, 1000)
+        group +=1
+    
+    group = 0
+    
+    for pos in range(10, 13):
+        ax = plt.subplot(4,3, pos)
+        strand = strands[1]
+        ax.margins(0.05)
+        ax.scatter(x = modVars[group][strand], y = scores[group][strand], 
+                   s = 0.8, c = scores[group][strand], label = labels[group])
+        if pos == 10:
+            ax.set_ylabel('predicted \n scores (-)')
+            ax.tick_params(left = True, labelleft= True,
+                           bottom = True, labelbottom = True)
+        elif pos == 11:
+            ax.set_xlabel('deviation of modifiable positions from center base (AT/TA)')
+            ax.tick_params(left = True, labelleft= False,
+                           bottom = True, labelbottom = True)
+        else:
+            ax.tick_params(left = True, labelleft= False,
+                           bottom = True, labelbottom = True)
+        ax.tick_params(left = False)
+        ax.set_ylim(0.0, 1.0)
+        ax.set_xlim(0, 1000)
+        group +=1
+
+    return plt
+
+
+def computeAUC(scores, true_lables, strands = [-1,1]):
+        
+    fpr = dict()
+    tpr = dict()
+    roc_auc = dict()
+    
+    for s in strands:
+        y_true = np.array([int(i) for i in true_lables[0][s]] + [int(j) for j in true_lables[1][s]])
+        y_test = np.array(scores[0][s] + scores[1][s])
+        fpr[s], tpr[s], threshold = roc_curve(y_true, y_test)
+        roc_auc[s] = auc(fpr[s], tpr[s])
+    
+    return fpr, tpr, roc_auc
+
+def plotROC(scores = [pos_scores, neg_scores], true_lables =  [pos_true_label, neg_true_label]):
+
+    fpr, tpr, roc_auc = computeAUC(scores = scores, 
+                            true_lables = true_lables)
+    axL = plt.subplot(221)
+    s = 1
+    axL.plot(fpr[s], tpr[s], color="darkorange", lw=2,
+        label="ROC curve (area = %0.2f)" % roc_auc[s])
+    axL.set_title("ROC of ctrl data (forward)", size = 'medium')
+
+    axR = plt.subplot(222)
+    s = -1
+    axR.plot(fpr[s], tpr[s], color="darkorange", lw=2,
+        label="ROC curve (area = %0.2f)" % roc_auc[s])
+    axR.set_title("ROC of ctrl data (reverse)", size = 'medium')
+
+    for ax in [axL, axR]:
+        ax.plot([0, 1], [0, 1], color="navy", lw=2, linestyle="--")
+        ax.set_xlim([0.0, 1.0])
+        ax.set_ylim([0.0, 1.05])
+        ax.set_xlabel("False Positive Rate")
+        ax.set_ylabel("True Positive Rate")
+        ax.legend(loc="lower right")
+    plt.tight_layout()

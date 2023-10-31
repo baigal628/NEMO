@@ -96,7 +96,7 @@ def getchromOrder(genome):
     return chromOrder
 
 def baseCount(seq, base):
-    baseLen = len(base)
+    baseLen = len(base[0])
     count = 0
     for nt in range(len(seq)-baseLen+1):
         if seq[nt:nt+baseLen] in base:
@@ -104,9 +104,9 @@ def baseCount(seq, base):
     return count
 
 def basePos(seq, base):
-    baseLen = len(base)
+    baseLen = len(base[0])
     pos = []
     for nt in range(len(seq)-baseLen+1):
-        if seq[nt:nt+baseLen] == base:
+        if seq[nt:nt+baseLen] in base:
             pos.append(nt)
     return pos
