@@ -1,3 +1,8 @@
+from seqUtil import *
+from bamUtil import *
+from nanoUtil import *
+from nntUtil import *
+from modPredict import *
 import matplotlib.pyplot as plt
 import matplotlib.patches as mplpatches
 import numpy as np
@@ -5,7 +10,6 @@ from sklearn.cluster import KMeans
 from sklearn.impute import SimpleImputer
 from collections import defaultdict
 from sklearn.metrics import roc_curve, auc
-from sklearn.metrics import roc_auc_score
 
 def readGTF(gtfFile, chromPlot, startPlot, endPlot, genePlot, features):
 
@@ -341,8 +345,8 @@ def plotModScores(modPredict_pos, modPredict_neg, modPredict_chrom, return_score
     else:
         return fig
 
-def evaluatePrediction(region, sam, sigAlign, label, kmerWindow=80, signalWindow=400, 
-                       modBase = ['AT', 'TA'], genome = genome, model = mymodel, weight = myweight):
+def evaluatePrediction(region, sam, sigAlign, label, genome, model, weight, kmerWindow=80, signalWindow=400, 
+                       modBase = ['AT', 'TA']):
     
     alignment = getAlignedReads(sam = sam, region = region, genome=genome, print_name=False)
     refSeq = alignment['ref']
@@ -424,7 +428,6 @@ def evaluatePrediction(region, sam, sigAlign, label, kmerWindow=80, signalWindow
 
 
 def plotPredictionScores(scores, modVars, modCounts, labels = ['pos', 'neg', 'chrom']):
-    
     
     strands = [1, -1]
     group = 0
@@ -530,7 +533,7 @@ def computeAUC(scores, true_lables, strands = [-1,1]):
     
     return fpr, tpr, roc_auc
 
-def plotROC(scores = [pos_scores, neg_scores], true_lables =  [pos_true_label, neg_true_label]):
+def plotROC(scores, true_lables):
 
     fpr, tpr, roc_auc = computeAUC(scores = scores, 
                             true_lables = true_lables)
@@ -554,3 +557,83 @@ def plotROC(scores = [pos_scores, neg_scores], true_lables =  [pos_true_label, n
         ax.set_ylabel("True Positive Rate")
         ax.legend(loc="lower right")
     plt.tight_layout()
+
+
+def exportBedGraph(region, sam, sigAlign, genome, model, weight, kmerWindow=80, signalWindow=400, binSize = 75, modBase = ['AT', 'TA']):
+    
+    alignment = getAlignedReads(sam = sam, region = region, genome=genome, print_name=False)
+    refSeq = alignment['ref']
+    all_scores, modCounts, modVars = defaultdict(list), defaultdict(list), defaultdict(list)
+    modPositions = basePos(refSeq, base = modBase)
+    count = baseCount(refSeq, base = modBase)
+    
+    reg = region.split(':')
+    chrom, pStart, pEnd = reg[0], int(reg[1].split('-')[0]), int(reg[1].split('-')[1])
+    
+    bins = np.arange(pStart, pEnd, binSize)
+    binScores = {bin:0 for bin in bins}
+    binCounts = {bin:0 for bin in bins}
+
+    for readID, eventStart, sigList, siglenList in parseSigAlign(sigAlign):
+        print(readID)
+        start_time = time.time()
+        print('Start processing ', readID)
+        strand = alignment[readID][1]
+        
+        sigLenList_init = pStart-eventStart-1
+        if sigLenList_init > len(siglenList):
+            continue
+        for pos in range(len(refSeq)):
+            if pos % 500 == 0:
+                print('Predicting at position:', pos)
+
+            # 1. Fetch sequences with kmer window size, this step is optional
+            seq = refSeq[pos:pos+kmerWindow]
+            
+            # 2. Fetch signals with signal window size 
+            signals = fetchSignal(pos, sigLenList_init, siglenList, sigList, signalWindow)
+            if signals == 'del':
+                continue
+            elif signals == 'end':
+                break
+            
+            # 3. Get predicted probability score from machine learning model
+            prob = nntPredict(signals, device = device, model = model, weights_path = weight)
+
+            idx = np.searchsorted(bins, pStart+pos, side='right')
+            binScores[bins[idx-1]] +=prob
+            binCounts[bins[idx-1]] +=1                    
+    return binScores, binCounts
+
+def writeBedGraph(bedGraphHeader, binScores, binCounts, binSize, chrom, outfile):
+    outFh = open(outfile, 'w')
+    for k,v in bedGraphHeader.items():
+        if v:
+            line = k + '=' + v + ' '
+            outFh.write(line)
+    outFh.write('\n')
+    for chrStart in binScores.keys():
+        chrEnd = chrStart + binSize
+        score = "%.3f" % (binScores[chrStart]/binCounts[chrStart])
+        line = '{chr}\t{start}\t{end}\t{score}\n'.format(chr = chrom, start = chrStart,  end = chrEnd, score = score)
+        outFh.write(line)
+    outFh.close()
+
+bedGraphHeader = {'track type':'bedGraph', 
+                  'name':'chrom_bin75', 
+                  'description':'addseq',
+                  'visibility':'', 
+                  'color':'r', 
+                  'altColor':'r', 
+                  'priority':'', 
+                  'autoScale':'off', 
+                  'alwaysZero':'off', 
+                  'gridDefault':'off', 
+                  'maxHeightPixels':'default', 
+                  'graphType':'bar',
+                  'viewLimits':'upper',
+                  'yLineMark':'',
+                  'yLineOnOff':'on',
+                  'windowingFunction':'mean',
+                  'smoothingWindow':'on'
+                 }

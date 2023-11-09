@@ -24,7 +24,7 @@ resnet1D = ResNet1D(
             increasefilter_gap=4,
             use_do=False)
 
-def aggregate_scors(scores, method='mean'):
+def aggregate_scors(scores, method):
     if method == 'mean':
         return np.nanmean(scores)
     elif method == 'median':
@@ -34,7 +34,7 @@ def aggregate_scors(scores, method='mean'):
     elif method == 'max':
         return np.nanmax(scores)
     
-def nntPredict(signals, device, model, weights_path, sigWindow = 400):
+def nntPredict(signals, device, model, weights_path, signalWindow = 400, method = 'mean'):
     '''
     Given a list of signals, return predicted modification scores.
     '''
@@ -49,12 +49,12 @@ def nntPredict(signals, device, model, weights_path, sigWindow = 400):
     probs = []
     
     #Here I omit +1 from len(signals)-sigWindow+1 because len(signals) already has one extra signal that corresponds to next kmer window.
-    for sigIdx in range(len(signals)-sigWindow):
-        input_tensor[:, :, :] = sequence_tensor[sigIdx:sigIdx+sigWindow]
+    for sigIdx in range(len(signals)-signalWindow):
+        input_tensor[:, :, :] = sequence_tensor[sigIdx:sigIdx+signalWindow]
         prob = model(input_tensor).sigmoid().item()
         probs.append(prob)
     
-    return aggregate_scors(probs)
+    return aggregate_scors(probs, method = method)
 
 def tune_siganl(sigList, min_val=50, max_val=130):
     new_sigList = [max(min_val, min(max_val, float(signal))) for signal in sigList]
@@ -116,3 +116,53 @@ def assign_scores(strand, refSeq, modPositions, sigList, siglenList, sigLenList_
         score = aggregate_scors(modScores[mod], method = method)
         scores .append(score)
     return scores
+
+
+def exportBedGraphBase(region, sam, sigAlign, kmerWindow=80, signalWindow=400, binSize = 75, threshold = 0.65,
+                       modBase = ['AT', 'TA'], genome = genome, model = mymodel, weight = myweight):
+
+    alignment = getAlignedReads(sam = sam, region = region, genome=genome, print_name=False)
+    refSeq = alignment['ref']
+    all_scores, modCounts, modVars = defaultdict(list), defaultdict(list), defaultdict(list)
+    modPositions = basePos(refSeq, base = modBase)
+    count = baseCount(refSeq, base = modBase)
+    
+    reg = region.split(':')
+    chrom, pStart, pEnd = reg[0], int(reg[1].split('-')[0]), int(reg[1].split('-')[1])
+    
+    bins = np.arange(pStart, pEnd, binSize)
+    binScores = {bin:0 for bin in bins}
+    binCounts = {bin:0 for bin in bins}
+
+    for readID, eventStart, sigList, siglenList in parseSigAlign(sigAlign):
+        print(readID)
+        start_time = time.time()
+        print('Start processing ', readID)
+        strand = alignment[readID][1]
+        
+        sigLenList_init = pStart-eventStart-1
+        if sigLenList_init > len(siglenList):
+            continue
+        for pos in range(len(refSeq)):
+            idx = np.searchsorted(bins, pStart+pos, side='right')
+            if pos % 500 == 0:
+                print('Predicting at position:', pos)
+
+            # 1. Fetch sequences with kmer window size, this step is optional
+            seq = refSeq[pos:pos+kmerWindow]
+            
+            # 2. Fetch signals with signal window size 
+            signals = fetchSignal(pos, sigLenList_init, siglenList, sigList, signalWindow)
+            if signals == 'del':
+                continue
+            elif signals == 'end':
+                break
+            
+            # 3. Get predicted probability score from machine learning model
+            prob = nntPredict(signals, device = device, model = model, weights_path = weight)
+            if prob > threshold:
+                print(prob)
+                binScores[bins[idx-1]] +=1
+            binCounts[bins[idx-1]] +=1
+
+    return binScores, binCounts
