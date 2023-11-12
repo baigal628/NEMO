@@ -3,8 +3,6 @@ import torch
 from nanoUtil import fetchSignal
 import time
 
-
-
 def aggregate_scors(scores, method):
     if method == 'mean':
         return np.nanmean(scores)
@@ -58,7 +56,7 @@ def runNNT(readID, strand, bins, step, aStart, aEnd, sigList, sigLenList, kmerWi
         start = max(bins[i],aStart)
         end = min(start+kmerWindow, aEnd)
         
-        print('Predicting at position:', start, '-',end)
+        # print('Predicting at position:', start, '-',end)
         
         signals = fetchSignal(start-aStart, end-aStart, sigLenList, sigList, signalWindow)
         
@@ -69,7 +67,7 @@ def runNNT(readID, strand, bins, step, aStart, aEnd, sigList, sigLenList, kmerWi
             continue
         else:
             # Get predicted probability score from machine learning model
-            prob = nntPredict(signals, device = device, model = model, weights_path = weight, signalWindow = signalWindow)
+            prob = nntPredict(signals, device = device, model = model, weights = weight, signalWindow = signalWindow)
             binScores[bins[i]] = prob
 
     total_time = "%.2f" % (time.time()-start_time)

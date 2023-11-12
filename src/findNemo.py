@@ -59,7 +59,7 @@ class findNemo:
         '''
 
         # Fetch reads aligned to the region
-        print('Collecting reads mapped to, ', region, ' ...')
+        print('Collecting reads mapped to ', region, ' ...')
         self.region = region
         self.alignment, self.chrom, self.qStart, self.qEnd = getAlignedReads(bam, region, genome)
         self.outpath = outpath
@@ -70,7 +70,7 @@ class findNemo:
         self.alignment = {self.reads[r]:self.alignment[r] for r in self.reads}
 
         # Store the id index match into a file.
-        readFh = open(outpath + prefix + region + '_readID.tsv', 'w')
+        readFh = open(outpath + prefix + '_' + region + '_readID.tsv', 'w')
         for k,v in self.reads.items(): readFh.write('{read}\t{index}\n'.format(read = k, index = v))
         readFh.close()
         print(len(self.reads), " reads mapped to ", region)
@@ -93,11 +93,10 @@ class findNemo:
             'RDN37': 'chrXII:450300-459300'
             }
 
-    def doWork(work):
-    
-        (readID, bins, step, aStart, aEnd, sigList, sigLenList, kmerWindow, signalWindow, device, model, weight) = work
+    def doWork(self, work):
+        (readID, strand, bins, step, aStart, aEnd, sigList, sigLenList, kmerWindow, signalWindow, device, model, weight) = work
         
-        scores = runNNT(readID, bins, step, aStart, aEnd, sigList, sigLenList, kmerWindow, signalWindow, device, model, weight)
+        scores = runNNT(readID, strand, bins, step, aStart, aEnd, sigList, sigLenList, kmerWindow, signalWindow, device, model, weight)
         
         return scores
     
@@ -106,7 +105,7 @@ class findNemo:
         print('Start predicting modified positions...')
         torch.multiprocessing.set_start_method('spawn')
         
-        bins = np.arange(self.qStart, self.qEnd, kmerWindow)
+        bins = np.arange(self.qStart, self.qEnd, step)
         
         device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
         
@@ -127,28 +126,27 @@ class findNemo:
         
         print('Device type: ', device)
         
-        # Use the specified threads number or maximum available CPU cores
-        num_processes = min(threads, multiprocessing.cpu_count())
-        pool = multiprocessing.Pool(processes=num_processes)
-
         # Total work to be done are stored in a list
         works = [(readID, strand, bins, step, aStart, aEnd, sigList, sigLenList, kmerWindow, signalWindow, device, models[model], weight) 
                   for readID, aStart, aEnd, strand, sigList, sigLenList in parseSigAlign(self.sigalign, self.alignment)]
         
+        # Use the specified threads number or maximum available CPU cores
+        num_processes = min(threads, multiprocessing.cpu_count())
+        
         for x in range(0, len(works), load):
-            # split total work by load
+            # split total work by loads
             works_per_load = works[x:x+load]
-            
-            predOut = self.outpath + self.prefix + str(self.region) + '_' + str(x) + '_prediction.tsv'
-
+            # open the pool for multiprocessing
+            pool = multiprocessing.Pool(processes=num_processes)
             # Use the pool.map() function to process reads in parallel
-            outs = pool.map(runNNT, works_per_load)
+            outs = pool.map(self.doWork, works_per_load)
 
             # Close the pool to release resources
             pool.close()
             pool.join()
 
             # Write the results from current work load
+            predOut = self.outpath + self.prefix + str(self.region) + '_' + str(x) + '_prediction.tsv'
             predOutFh = open(predOut, 'w')
             for r in range(len(outs)):
                 out = outs[r]
