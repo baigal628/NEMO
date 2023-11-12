@@ -1,20 +1,63 @@
-# seqUtils
-A deep learning model to predict modifications on long read data
+# NEMO: a NEural network model for mapping MOdifications in nanopore Long-read
 
-## Usage
+# I. Utilities
 ```{python}
-import sys
-from seqUtil import *
-from bamUtil import *
-from nanoUtil import *
-from nntUtil import *
-from modPredict import *
+python3 findNemo.py --help
+
+usage: findNemo.py [-h] [--region REGION] [--bam BAM] [--genome GENOME] [--eventalign EVENTALIGN] [--sigalign SIGALIGN]
+                   [--outpath OUTPATH] [--prefix PREFIX] [--model MODEL] [--weight WEIGHT] [--threads THREADS] [--step STEP]
+                   [--kmerWindow KMERWINDOW] [--signalWindow SIGNALWINDOW] [--load LOAD]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --region REGION, -r REGION
+                        genomic coordinates to perform modification predictions. E.g. chrI:2000-5000 or chrI.
+  --bam BAM, -b BAM     sorted, indexed, and binarized alignment file.
+  --genome GENOME, -g GENOME
+                        reference genome fasta file
+  --eventalign EVENTALIGN, -e EVENTALIGN
+                        nanopolish eventalign file.
+  --sigalign SIGALIGN, -s SIGALIGN
+                        sigalign file if sigAlign file already exist. If not, must provide eventalign to generate sigAlign file.
+  --outpath OUTPATH, -o OUTPATH
+                        path to store the output files.
+  --prefix PREFIX, -p PREFIX
+                        prefix of output file names.
+  --model MODEL, -m MODEL
+                        deep neural network meodel used for prediction.
+  --weight WEIGHT, -w WEIGHT
+                        path to model weight.
+  --threads THREADS, -t THREADS
+                        number of threads.
+  --step STEP, -step STEP
+                        step to bin the region.
+  --kmerWindow KMERWINDOW, -kw KMERWINDOW
+                        kmer window size to extend bin.
+  --signalWindow SIGNALWINDOW, -sw SIGNALWINDOW
+                        signal Window size to feed into the model.
+  --load LOAD, -l LOAD  number of reads to load into each iterations. Each iteration will output a file.
 ```
 
-```{python}
-neg_bam = './projects/Add-seq/data/ctrl/mapping/unique.0.pass.sorted.bam'
-ref = './projects/Add-seq/data/ref/sacCer3.fa'
-neg_evt = './projects/Add-seq/data/ctrl/eventalign/unique.0.eventalign.tsv'
+# II. Example:
+## 1. Map modified regions using pre-trained model
 
-modPredict(bam = neg_bam, event = neg_evt, region = 'PHO5', genome=ref, prefix = 'PHO5_neg')
+```{bash}
+python3 ./findNemo.py 
+    --region chrII \
+    --bam ./Add-seq/data/chrom/mapping/chrom.sorted.bam \
+    --genome ./Add-seq/data/ref/sacCer3.fa \
+    --eventalign ./addseq_data/eventalign/chrII.eventalign.txt \
+    --outpath ./addseq_data/231110_test_nemo_v0_chrII/ \
+    --prefix 231110_addseq_chrII \
+    --threads 8
+
+# With pre computed sigalign file:
+python3 ./findNemo.py 
+    --region chrII \
+    --bam ./Add-seq/data/chrom/mapping/chrom.sorted.bam \
+    --genome ./Add-seq/data/ref/sacCer3.fa \
+    --sigalign ./addseq_data/231110_test_nemo_v0_chrII/231110_test_chrIIchrII_sig.tsv \
+    --outpath ./addseq_data/231110_test_nemo_v0_chrII/ \
+    --prefix 231110_addseq_chrII \
+    --threads 8
 ```
