@@ -1,19 +1,19 @@
 import pysam
-import numpy as np
-import random
-from seqUtil import *
+from seqUtil import fetchSize, reverseCompliment
 
-def getAlignedReads(sam, region, print_quer = False, print_name = False, print_ref = False, 
-                    print_align = False, genome = '', reverse = False, include_quer = False):
+def getAlignedReads(bam, region, genome, print_quer = False, print_name = False, refSeq = False, print_ref = False,
+                    print_align = False, reverse = False, include_quer = False):
     '''
-    sam: input sam/bam file.
-    region: region to fetch aligned reads.
-        E.g. region = 'chrI:12300-12500' or region = 'chrV'
-    print_name: Set True to print readname.
-    print_ref: Set True to print reference sequnce. If true, must provide genome.
-    print_align: Set True to print align start and end of reads.
-    genome: reference genome indexed with faidx.
-    reverse: Set True to reverse compliment reads mapped to negative strands.
+    Input:
+        bam: input sam/bam file.
+                genome: reference genome indexed with faidx.
+        region: region to fetch aligned reads.
+            E.g. region = 'chrI:12300-12500' or region = 'chrV'
+        print_name: Set True to print readname.
+        refSeq: Set True to store refernce sequences in the output.
+        print_ref: Set True to print reference sequnce. If true, must provide genome.
+        print_align: Set True to print align start and end of reads.
+        reverse: Set True to reverse compliment reads mapped to negative strands.
     '''
     
     cigarCode = {1: 'I', 2: 'D', 3: 'N'}
@@ -28,8 +28,8 @@ def getAlignedReads(sam, region, print_quer = False, print_name = False, print_r
     
     qrange = qend - qstart
     out = {}
-    samFile = pysam.AlignmentFile(sam)
-    if genome:
+    samFile = pysam.AlignmentFile(bam, 'rb')
+    if refSeq:
         refFile = pysam.FastaFile(genome)
         read = refFile.fetch(chrom, qstart, qend)
         if print_name:
@@ -81,5 +81,6 @@ def getAlignedReads(sam, region, print_quer = False, print_name = False, print_r
                 out[s.query_name] = (alignstart, alignend, alignedRead, strand)
             else:
                 out[s.query_name] = (alignstart, alignend, strand)
-    return out, chrom, qstart, qend
     samFile.close()
+    return out, chrom, qstart, qend
+   

@@ -1,28 +1,9 @@
 import numpy as np
-import bisect
 import torch
-from torch.utils.data import DataLoader
-from torchsummary import summary
-from tqdm import tqdm
-from nanopore_dataset import create_sample_map
-from nanopore_dataset import create_splits
-from nanopore_dataset import load_csv
-from nanopore_dataset import NanoporeDataset
-from resnet1d import ResNet1D
+from nanoUtil import fetchSignal
+import time
 
-from seqUtil import *
 
-resnet1D = ResNet1D(
-            in_channels=1,
-            base_filters=128,
-            kernel_size=3,
-            stride=2,
-            groups=1,
-            n_block=8,
-            n_classes=2,
-            downsample_gap=2,
-            increasefilter_gap=4,
-            use_do=False)
 
 def aggregate_scors(scores, method):
     if method == 'mean':
@@ -34,12 +15,12 @@ def aggregate_scors(scores, method):
     elif method == 'max':
         return np.nanmax(scores)
     
-def nntPredict(signals, device, model, weights_path, signalWindow = 400, method = 'mean'):
+def nntPredict(signals, device, model, weights, signalWindow = 400, method = 'mean'):
     '''
     Given a list of signals, return predicted modification scores.
     '''
     
-    model.load_state_dict(torch.load(weights_path, map_location=torch.device(device)))
+    model.load_state_dict(torch.load(weights, map_location=torch.device(device)))
     model.to(device)
     
     # set input data
@@ -60,109 +41,39 @@ def tune_siganl(sigList, min_val=50, max_val=130):
     new_sigList = [max(min_val, min(max_val, float(signal))) for signal in sigList]
     return new_sigList
 
-def assign_scores(strand, refSeq, modPositions, sigList, siglenList, sigLenList_init,
-                  weights, model, device, tune = False, method = 'median', kmerWindow=80, signalWindow=400):
+def runNNT(readID, strand, bins, step, aStart, aEnd, sigList, sigLenList, kmerWindow, signalWindow, device, model, weight):
     
-    # Position of As, relative to the reference
-    modScores = {i:[] for i in modPositions}
+    print('Start processing read', readID)
+    start_time = time.time()
     
-    for pos in range(len(refSeq)):
-        if pos % 500 ==0:
-            print('Predicting at position:', pos)
-        
+    L = int(np.floor(aStart/step))
+    R = int(np.floor(aEnd/step))
+    binScores = {}
+    
+    for i in range(L, R+1):
         # 1. Fetch sequences with kmer window size, this step is optional
-        # seq = refSeq[pos:pos+kmerWindow]
-        # 2. Fetch signals with signal window size 
-        pos_sigLenList_start = int(sigLenList_init)+pos
-        pos_sigLenList_end = pos_sigLenList_start+1
-        if pos_sigLenList_start<0: 
-            start=0
+        # seq = refSeq[bin:bin+kmerWindow]
+        
+        # 2. Fetch signals with signal window size
+        start = max(bins[i],aStart)
+        end = min(start+kmerWindow, aEnd)
+        
+        print('Predicting at position:', start, '-',end)
+        
+        signals = fetchSignal(start-aStart, end-aStart, sigLenList, sigList, signalWindow)
+        
+        if signals == 'end':
+            break
+        # signals not enough (less than signalWindow) or not signals aligned to this region (should not happen theoraticaly)
+        elif signals == 'del':
+            continue
         else:
-            start = int(siglenList[pos_sigLenList_start])
-        if len(sigList)-start< signalWindow:
-            print('Reached the end of the signal.')
-            break
-        end = int(siglenList[pos_sigLenList_end])
-        # If no signals aligned to this position. E.g. chrII 429016 is missed is eventalign output.
-        if start == end:
-            # print('No signal captured at position: ', pos)
-            continue
-        signals = [float(s) for s in sigList[start:end+signalWindow]]
-        # 3. Get predicted probability score from machine learning model
-        prob = nntPredict(signals,device = device, model = model, weights_path = weights)
-        if len(signals) == signalWindow:
-            print(start, end)
-            break
-        # 4. Assign predicted scores to each modPosition
-        # modifiable positions [1,3,4,5,7,10,15,16,21,40]
-        # kmer position is 2: [2:2+22]
-        # modbase_left = 1
-        # modbase_right = 9
-        # modifiable position within kmer window [3,4,5,7,10,15,16,21]
-        modbase_left = bisect.bisect_left(modPositions, pos)
-        modbase_right = bisect.bisect_right(modPositions, pos+kmerWindow)
-        modbase_count = modbase_right - modbase_left
-        
-        for p in range(modbase_left, modbase_right):
-            modPosition = modPositions[p]
-            # 4.1 Tune signals based on position of A and A content:
-            if tune:
-                strand = strand
-                prob = model_scores(prob, modPosition, pos, modbase_count, strand)
-            modScores[modPosition].append(prob)
+            # Get predicted probability score from machine learning model
+            prob = nntPredict(signals, device = device, model = model, weights_path = weight, signalWindow = signalWindow)
+            binScores[bins[i]] = prob
+
+    total_time = "%.2f" % (time.time()-start_time)
     
-    scores = []
-    for mod in modScores:
-        score = aggregate_scors(modScores[mod], method = method)
-        scores .append(score)
-    return scores
-
-
-def exportBedGraphBase(region, sam, sigAlign, kmerWindow=80, signalWindow=400, binSize = 75, threshold = 0.65,
-                       modBase = ['AT', 'TA'], genome = genome, model = mymodel, weight = myweight):
-
-    alignment = getAlignedReads(sam = sam, region = region, genome=genome, print_name=False)
-    refSeq = alignment['ref']
-    all_scores, modCounts, modVars = defaultdict(list), defaultdict(list), defaultdict(list)
-    modPositions = basePos(refSeq, base = modBase)
-    count = baseCount(refSeq, base = modBase)
+    print('finished processing ', readID, ' in ', total_time, 's.')
     
-    reg = region.split(':')
-    chrom, pStart, pEnd = reg[0], int(reg[1].split('-')[0]), int(reg[1].split('-')[1])
-    
-    bins = np.arange(pStart, pEnd, binSize)
-    binScores = {bin:0 for bin in bins}
-    binCounts = {bin:0 for bin in bins}
-
-    for readID, eventStart, sigList, siglenList in parseSigAlign(sigAlign):
-        print(readID)
-        start_time = time.time()
-        print('Start processing ', readID)
-        strand = alignment[readID][1]
-        
-        sigLenList_init = pStart-eventStart-1
-        if sigLenList_init > len(siglenList):
-            continue
-        for pos in range(len(refSeq)):
-            idx = np.searchsorted(bins, pStart+pos, side='right')
-            if pos % 500 == 0:
-                print('Predicting at position:', pos)
-
-            # 1. Fetch sequences with kmer window size, this step is optional
-            seq = refSeq[pos:pos+kmerWindow]
-            
-            # 2. Fetch signals with signal window size 
-            signals = fetchSignal(pos, sigLenList_init, siglenList, sigList, signalWindow)
-            if signals == 'del':
-                continue
-            elif signals == 'end':
-                break
-            
-            # 3. Get predicted probability score from machine learning model
-            prob = nntPredict(signals, device = device, model = model, weights_path = weight)
-            if prob > threshold:
-                print(prob)
-                binScores[bins[idx-1]] +=1
-            binCounts[bins[idx-1]] +=1
-
-    return binScores, binCounts
+    return binScores
