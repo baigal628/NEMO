@@ -27,7 +27,7 @@ parser.add_argument('--threads', '-t', default=1, type=int, action='store', help
 parser.add_argument('--step', '-step', default=40, type=int, action='store', help='step to bin the region.')
 parser.add_argument('--kmerWindow', '-kw', default=75, type=int, action='store', help='kmer window size to extend bin.')
 parser.add_argument('--signalWindow', '-sw', default=400, type=int, action='store', help='signal Window size to feed into the model.')
-parser.add_argument('--load', '-l', default=1000, type=int, action='store', help='number of reads to load into each iterations. Each iteration will output a file.')
+parser.add_argument('--load', '-l', default=500, type=int, action='store', help='number of reads to load into each iterations. Each iteration will output a file.')
 
 
 args = parser.parse_args()

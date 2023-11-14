@@ -53,7 +53,7 @@ def runNNT(readID, strand, bins, step, aStart, aEnd, sigList, sigLenList, kmerWi
         # seq = refSeq[bin:bin+kmerWindow]
         
         # 2. Fetch signals with signal window size
-        start = max(bins[i],aStart)
+        start = max(bins[i], aStart)
         end = min(start+kmerWindow, aEnd)
         
         # print('Predicting at position:', start, '-',end)
