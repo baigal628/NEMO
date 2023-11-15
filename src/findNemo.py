@@ -90,7 +90,7 @@ class findNemo:
             self.sigalign = outpath + prefix + '_' + str(region) + '_sig.tsv'
             parseEventAlign(eventAlign = eventalign, reads = self.reads, outfile = self.sigalign)
         else:
-            print('Error: None of sigalign or eventalign file is provided!')
+            print('None of sigalign or eventalign file is provided.')
         
         self.gene_regions = {
             'PHO5': 'chrII:429000-435000',
