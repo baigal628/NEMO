@@ -2,7 +2,6 @@ from seqUtil import *
 from bamUtil import *
 from nanoUtil import *
 from nntUtil import *
-from modPredict import *
 import matplotlib.pyplot as plt
 import matplotlib.patches as mplpatches
 import numpy as np
@@ -77,79 +76,16 @@ def readGTF(gtfFile, chromPlot, startPlot, endPlot, genePlot, features):
     sorted_gtfReads = dict(sorted(gtfReads.items(), key = lambda x:x[1]['start']))
     return (features, sorted_gtfReads)
 
-def collectScores(modScores):
-    '''
-    collectScores reads modScores as input and format reads, modified positions and 
-    modified scores into a format that can feed into clustering algorithms.
-    '''
-    
-    with open(modScores, 'r') as msFh:
-        readnames, mtxs = defaultdict(list), defaultdict(list) 
-        positions = [int(p) for p in msFh.readline().strip().split('\t')[1].split(',')]       
-        for line in msFh:
-            line = line.strip().split('\t')
-            strand = int(line[2])
-            readnames[strand].append(line[0])
-            mtxs[strand].append(line[5].split(','))
-    for s in mtxs:
-        mtxs[s] = np.array(mtxs[s], dtype = float)
-    
-    return dict(mtxs), dict(readnames), positions
-
-
-def clusterRead(mtx, readname, outpath, prefix, strand, n_clusters, 
-                show_elbow = False, return_cluster = True, print_inertia = False, print_iterations = False):
-    
-    
-    outfile = open(outpath + prefix  +'_clustering' + str(strand) + '.tsv', 'w')
-    outfile.write('readID\tcluster\n')
-    imp = SimpleImputer(missing_values=np.nan, strategy='mean')
-
-    print('Imputing missing values...')
-    score_mtx = imp.fit_transform(mtx)
-
-    if show_elbow:
-        n_reads = len(readname)
-        inertias = []
-
-        for i in range(1, n_reads+1):
-            kmeans = KMeans(n_clusters=i)
-            kmeans.fit(score_mtx)
-            inertias.append(kmeans.inertia_)
-
-        plt.plot(range(1,n_reads+1), inertias, marker='o')
-        plt.title('Elbow method')
-        plt.xlabel('Number of clusters')
-        plt.ylabel('Inertia')
-        plt.show()
-
-    kmeans = KMeans(
-        init="random",
-        n_clusters=n_clusters,
-        n_init=10,
-        max_iter=300,
-        random_state=42)
-
-    kmeans.fit(score_mtx)
-    if print_inertia:
-        print('inertia: ', kmeans.inertia_)
-    if print_iterations:
-        print('iterations: ', kmeans.n_iter_)
-
-    for k,v in zip(readname, kmeans.labels_):
-        line = '{}\t{}\t{}\n'.format(k, strand, v)
-        outfile.write(line)
-    outfile.close()
-    
-    if return_cluster:
-        return kmeans.labels_
-
-def plotGtfTrack(plot, gtfFile, chromPlot, startPlot, endPlot,
+def plotGtfTrack(plot, gtfFile, region,
                  features = ['CDS', 'start_codon'], adjust_features = [0, 0.25],
                  label_name = True, label_direction = False, colorpalates= ['orange', 'blue'], 
                  thinHeight = 0.2, thickHeight = 0.8, line_width = 0):
     
-    features, sorted_gtfReads = readGTF(gtfFile, chromPlot = chromPlot.split('chr')[1], 
+    
+    chrom = region.split(':')[0]
+    locus = region.split(':')[1].split('-')
+    startPlot, endPlot = int(locus[0]), int(locus[1])
+    features, sorted_gtfReads = readGTF(gtfFile, chromPlot = chrom.split('chr')[1], 
                                         genePlot = 'gene_name',
                                         startPlot = startPlot, endPlot = endPlot, features = features)
     
@@ -220,80 +156,54 @@ def plotGtfTrack(plot, gtfFile, chromPlot, startPlot, endPlot,
                    right=False, labelright=False,
                    top=False, labeltop=False)
 
-def plotModTrack(plot, startPlot, endPlot, modScores, cluster = True, n_clusters = 3, threashold = 0.6,
-                 outpath = '', prefix = '', annot = '', label_strand = True, label_rname = False,
-                 colorPalate = {'modT': 'orangered', 'modF':'dodgerblue', 'unMod': 'lightgrey'}, 
-                 height = 0.8, width = 1, line_width = 0, ylim = ''):
+def clusterRead(mtx, readname, outpath, prefix, strand, n_clusters, 
+                show_elbow = False, return_cluster = True, print_inertia = False, print_iterations = False):
     
-    print('Reading modScore files...')
-    mtxs, readnames, positions = collectScores(modScores)
-    tick_strand, tick_rname, tick_yaxis = [], [], []
-    strandDict = {-1:'-', 1: '+'}
-    bottom = 0
     
-    for strand in mtxs:
-        mtx, readname = mtxs[strand], readnames[strand]
-        
-        try:
-            assert mtx.shape == (len(readname), len(positions))
-        except:
-            print('dimention of score matrix does not match readname and position length!')
+    outfile = open(outpath + prefix  +'_clustering' + str(strand) + '.tsv', 'w')
+    outfile.write('readID\tcluster\n')
+    imp = SimpleImputer(missing_values=np.nan, strategy='mean')
 
-        
-        sorted_readIdx = readname
+    print('Imputing missing values...')
+    score_mtx = imp.fit_transform(mtx)
 
-        if cluster:
-            print("clustering reads...")
-            label = clusterRead(mtx = mtx, readname = readname, outpath = outpath, 
-                                 prefix = prefix, strand = strand, n_clusters=n_clusters, show_elbow = False)
-            sorted_readIdx = [x for _, x in sorted(zip(label, np.arange(0,len(readname))))]
-        print('plotting modification track on', strandDict[strand], 'strand...')
-        
-        for readIdx in sorted_readIdx:
+    if show_elbow:
+        n_reads = len(readname)
+        inertias = []
 
-            rectangle = mplpatches.Rectangle([startPlot, bottom-(height/2)], endPlot, height,
-                                    facecolor = colorPalate['unMod'],
-                                    edgecolor = 'grey',
-                                    linewidth = line_width)
-            
-            plot.add_patch(rectangle)
+        for i in range(1, n_reads+1):
+            kmeans = KMeans(n_clusters=i)
+            kmeans.fit(score_mtx)
+            inertias.append(kmeans.inertia_)
 
-            tick_yaxis.append(bottom)
+        plt.plot(range(1,n_reads+1), inertias, marker='o')
+        plt.title('Elbow method')
+        plt.xlabel('Number of clusters')
+        plt.ylabel('Inertia')
+        plt.show()
 
-            if label_strand:
-                tick_strand.append(strandDict[strand])
-            if label_rname:
-                tick_rname.append(readname[readIdx])
+    kmeans = KMeans(
+        init="random",
+        n_clusters=n_clusters,
+        n_init=10,
+        max_iter=300,
+        random_state=42)
 
-            for posIdx in range(len(positions)):
-                if mtx[readIdx,posIdx] >= threashold:
-                    color = colorPalate['modT']
-                else:
-                    color = colorPalate['modF']
+    kmeans.fit(score_mtx)
+    if print_inertia:
+        print('inertia: ', kmeans.inertia_)
+    if print_iterations:
+        print('iterations: ', kmeans.n_iter_)
 
-                left = positions[posIdx]+startPlot
-                rectangle = mplpatches.Rectangle([left, bottom-(height/2)], width, height, 
-                                                 facecolor = color, edgecolor = 'grey',
-                                                 linewidth = line_width)
-                plot.add_patch(rectangle)
-            bottom +=1
+    for k,v in zip(readname, kmeans.labels_):
+        line = '{}\t{}\t{}\n'.format(k, strand, v)
+        outfile.write(line)
+    outfile.close()
     
-    print('finished plotting file: ', modScores)
-    plot.set_xlim(startPlot, endPlot)
-    plot.set_ylabel(annot)
-    if not ylim:
-        plot.set_ylim(-1,len(tick_yaxis))
-    else:
-        plot.set_ylim(ylim[0], ylim[1])
-    
-    plot.tick_params(bottom=False, labelbottom=False,
-                   left=True, labelleft=True,
-                   right=False, labelright=False,
-                   top=False, labeltop=False)
-    if label_strand:
-        plot.set_yticks(ticks= tick_yaxis, labels = tick_strand)
+    if return_cluster:
+        return kmeans.labels_
 
-def plotModScores(modPredict_pos, modPredict_neg, modPredict_chrom, return_scores = False):
+def plotModDistribution(modPredict_pos, modPredict_neg, modPredict_chrom, return_scores = False):
     '''
     plotModDistribution reads positive, negative and chromatin modification scores from modScores.tsv files and plot histograms.
     '''
@@ -345,86 +255,150 @@ def plotModScores(modPredict_pos, modPredict_neg, modPredict_chrom, return_score
     else:
         return fig
 
-def evaluatePrediction(region, sam, sigAlign, label, genome, model, weight, kmerWindow=80, signalWindow=400, 
-                       modBase = ['AT', 'TA']):
+def collectPred(prediction, bins, step):
+    '''
+    collectScores function reads prediction as input, filter reads mapped to the given region, modified positions and 
+    modified scores into a format that can feed into clustering algorithms.
+    '''
     
-    alignment = getAlignedReads(sam = sam, region = region, genome=genome, print_name=False)
-    refSeq = alignment['ref']
-    all_scores, modCounts, modVars = defaultdict(list), defaultdict(list), defaultdict(list)
-    modPositions = basePos(refSeq, base = modBase)
-    count = baseCount(refSeq, base = modBase)
-    
-    reg = region.split(':')
-    chrom, pStart, pEnd = reg[0], int(reg[1].split('-')[0]), int(reg[1].split('-')[1])
-    
-    for readID, eventStart, sigList, siglenList in parseSigAlign(sigAlign):
-        print(readID)
-        start_time = time.time()
-        print('Start processing ', readID)
-        strand = alignment[readID][1]
-        
-        sigLenList_init = pStart-eventStart-1
-        if sigLenList_init > len(siglenList):
-            continue
-        
-        # Position of As, relative to the reference
-        modScores = {i:[] for i in modPositions}
-
-        for pos in range(len(refSeq)):
-            if pos % 500 == 0:
-                print('Predicting at position:', pos)
-
-            # 1. Fetch sequences with kmer window size, this step is optional
-            seq = refSeq[pos:pos+kmerWindow]
-            
-            # 2. Fetch signals with signal window size 
-            pos_sigLenList_start = int(sigLenList_init)+pos
-            pos_sigLenList_end = pos_sigLenList_start+1
-
-            if pos_sigLenList_start<0: 
-                start=0
-            else:
-                start = int(siglenList[pos_sigLenList_start])
-            
-            # reached the end of the signal list
-            if len(sigList)-start< signalWindow:
-                break
-            
-            end = int(siglenList[pos_sigLenList_end])
-            
-            # if no signals aligned to this position
-            if start == end:
+    with open(prediction, 'r') as predFh:
+        readnames, mtxs = defaultdict(list), defaultdict(list) 
+        for line in predFh:
+            line = line.strip().split('\t')
+            readname = line[0]
+            strand = line[1]
+            binStart = int(line[2])
+            if binStart > bins[-1]:
                 continue
             
-            signals = [float(s) for s in sigList[start:end+signalWindow]]
-            
-            # 3. Get predicted probability score from machine learning model
-            prob = nntPredict(signals, device = device, model = model, weights_path = weight)
-            
-            # 4. Assign predicted scores to each modPosition
-            # modifiable positions [1,3,4,5,7,10,15,16,21,40]
-            # kmer position is 2: [2:2+22]
-            # modbase_left = 1
-            # modbase_right = 9
-            # modifiable position within kmer window [3,4,5,7,10,15,16,21]
-            modbase_left = bisect.bisect_left(modPositions, pos)
-            modbase_right = bisect.bisect_right(modPositions, pos+kmerWindow)
-            modbase_count = modbase_right - modbase_left
+            probs = line[3].split(',')
+            binEnd = binStart + step*(len(probs)-1)
 
-            #deviation of modifiable position from center point
-            mid = int((pos+kmerWindow)/2) # floor
-            # total sum of squares
-            tss = [np.square(modPos-mid) for modPos in modPositions[modbase_left:modbase_right]]
-            variation = np.sum(tss)/(len(tss)-1)
-
-            all_scores[strand].append(prob)
-            modVars[strand].append(np.sqrt(variation))
-            modCounts[strand].append(modbase_count)
-    true_labels = {}
-    for s in all_scores:
-        true_labels[s] = np.ones(len(all_scores[s]))*label
+            if binEnd < bins[0]:
+                continue
+            else:
+                thisprobs = np.zeros(len(bins))
+                i = int((binStart-bins[0])/step)
+                if i < 0:
+                    probs = probs[-i:]
+                    i = 0
+                for prob in probs:
+                    thisprobs[i]=prob
+                    i+=1
+                    if i >= len(bins):
+                        break
+                readnames[strand].append(readname)
+                mtxs[strand].append(thisprobs)
+        
+        for s in mtxs:
+            mtxs[s] = np.array(mtxs[s], dtype = float)
     
-    return all_scores, modVars, modCounts, true_labels
+    return dict(mtxs), dict(readnames)
+
+def plotModTrack(plot, prediction, region, bins, step, outpath, prefix,
+            cluster = True, n_clusters = 1, threashold = 0.5,
+            annot = '', label_strand = True, label_rname = False,
+            colorPalate = {'modT': 'orangered', 'modF':'dodgerblue', 'unMod': 'lightgrey'}, 
+            height = 0.8, line_width = 0, ylim = ''):
+
+    chrom = region.split(':')[0]
+    locus = region.split(':')[1].split('-')
+    pstart, pend = int(locus[0]), int(locus[1])
+    
+    pbins = bins[int(pstart/step):int(pend/step)+1]
+    print('Reading prediction files...')
+    mtxs, readnames = collectPred(prediction, pbins, step)
+    print('Finished reading prediction files.')
+    
+    tick_strand, tick_rname, tick_yaxis = [], [],[]
+    strandDict = {'-1':'-', '1': '+'}
+    bottom = 0
+    
+    for strand in mtxs:
+        mtx, readname = mtxs[strand], readnames[strand]
+        
+        try:
+            assert mtx.shape == (len(readname), len(pbins))
+        except:
+            print('dimention of score matrix does not match readname and bin length!')
+
+        
+        sorted_readIdx = readname
+
+        if cluster:
+            print("clustering reads...")
+            label = clusterRead(mtx = mtx, readname = readname, outpath = outpath, 
+                                 prefix = prefix+'_'+region, strand = strand, n_clusters=n_clusters, show_elbow = False)
+            
+            sorted_readIdx = [x for _, x in sorted(zip(label, np.arange(0,len(readname))))]
+        
+        print('plotting modification track on', strandDict[strand], 'strand...')
+        
+        for readIdx in sorted_readIdx:
+
+            rectangle = mplpatches.Rectangle([pbins[0], bottom-(height/2)], pbins[-1], height,
+                                    facecolor = colorPalate['unMod'],
+                                    edgecolor = 'grey',
+                                    linewidth = line_width)
+            
+            plot.add_patch(rectangle)
+
+            tick_yaxis.append(bottom)
+
+            if label_strand:
+                tick_strand.append(strandDict[strand])
+            if label_rname:
+                tick_rname.append(readname[readIdx])
+
+            for posIdx in range(len(pbins)):
+                if mtx[readIdx,posIdx] >= threashold:
+                    color = colorPalate['modT']
+                else:
+                    color = colorPalate['modF']
+
+                left = pbins[posIdx]
+                rectangle = mplpatches.Rectangle([left, bottom-(height/2)], step, height, 
+                                                 facecolor = color, edgecolor = 'grey',
+                                                 linewidth = line_width)
+                plot.add_patch(rectangle)
+            bottom +=1
+    
+    print('finished plotting file: ', prediction)
+    
+    plot.set_xlim(pstart, pend)
+    plot.set_ylabel(annot)
+    if not ylim:
+        plot.set_ylim(-1,len(tick_yaxis))
+    else:
+        plot.set_ylim(ylim[0], ylim[1])
+    
+    plot.tick_params(bottom=False, labelbottom=False,
+                   left=True, labelleft=True,
+                   right=False, labelright=False,
+                   top=False, labeltop=False)
+    if label_strand:
+        plot.set_yticks(ticks= tick_yaxis, labels = tick_strand)
+
+
+def plotAllTrack(prediction, gtf, region, bins, step, outpath, prefix, plot_ctrl=False, 
+                 figureWidth=5, figureHeight=7, panelWidth=4, panelHeight=1.5):
+    if plot_ctrl:
+        plt.figure(figsize=(figureWidth,figureHeight))
+        panelt = plt.axes([0.5/figureWidth, 6.1/figureHeight, panelWidth/figureWidth, panelHeight/2.5/figureHeight])
+        panel0 = plt.axes([0.5/figureWidth, 5.0/figureHeight, panelWidth/figureWidth, panelHeight/1.5/figureHeight])
+        panel1 = plt.axes([0.5/figureWidth, 3.4/figureHeight, panelWidth/figureWidth, panelHeight/figureHeight])
+        panel2 = plt.axes([0.5/figureWidth, 1.8/figureHeight, panelWidth/figureWidth, panelHeight/figureHeight])
+        panel3 = plt.axes([0.5/figureWidth, 0.2/figureHeight, panelWidth/figureWidth, panelHeight/figureHeight])
+    else:
+        plt.figure(figsize=(figureWidth,figureHeight))
+        figureHeight = figureHeight/2
+        panel0 = plt.axes([0.5/figureWidth, 3.05/figureHeight, panelWidth/figureWidth, panelHeight/3.5/figureHeight])
+        panel1 = plt.axes([0.5/figureWidth, 2.7/figureHeight, panelWidth/figureWidth, panelHeight/4.6/figureHeight])
+        panel2 = plt.axes([0.5/figureWidth, 2.35/figureHeight, panelWidth/figureWidth, panelHeight/4.6/figureHeight])
+        panel3 = plt.axes([0.5/figureWidth, 0.2/figureHeight, panelWidth/figureWidth, panelHeight*1.4/figureHeight])
+        plotGtfTrack(plot = panel0, region = region, gtfFile = gtf)
+        plotModTrack(plot=panel3, prediction=prediction, region=region, bins=bins, step=step, outpath=outpath, prefix=prefix)
+    return plt
 
 
 def plotPredictionScores(scores, modVars, modCounts, labels = ['pos', 'neg', 'chrom']):
@@ -559,81 +533,3 @@ def plotROC(scores, true_lables):
     plt.tight_layout()
 
 
-def exportBedGraph(region, sam, sigAlign, genome, model, weight, kmerWindow=80, signalWindow=400, binSize = 75, modBase = ['AT', 'TA']):
-    
-    alignment = getAlignedReads(sam = sam, region = region, genome=genome, print_name=False)
-    refSeq = alignment['ref']
-    all_scores, modCounts, modVars = defaultdict(list), defaultdict(list), defaultdict(list)
-    modPositions = basePos(refSeq, base = modBase)
-    count = baseCount(refSeq, base = modBase)
-    
-    reg = region.split(':')
-    chrom, pStart, pEnd = reg[0], int(reg[1].split('-')[0]), int(reg[1].split('-')[1])
-    
-    bins = np.arange(pStart, pEnd, binSize)
-    binScores = {bin:0 for bin in bins}
-    binCounts = {bin:0 for bin in bins}
-
-    for readID, eventStart, sigList, siglenList in parseSigAlign(sigAlign):
-        print(readID)
-        start_time = time.time()
-        print('Start processing ', readID)
-        strand = alignment[readID][1]
-        
-        sigLenList_init = pStart-eventStart-1
-        if sigLenList_init > len(siglenList):
-            continue
-        for pos in range(len(refSeq)):
-            if pos % 500 == 0:
-                print('Predicting at position:', pos)
-
-            # 1. Fetch sequences with kmer window size, this step is optional
-            seq = refSeq[pos:pos+kmerWindow]
-            
-            # 2. Fetch signals with signal window size 
-            signals = fetchSignal(pos, sigLenList_init, siglenList, sigList, signalWindow)
-            if signals == 'del':
-                continue
-            elif signals == 'end':
-                break
-            
-            # 3. Get predicted probability score from machine learning model
-            prob = nntPredict(signals, device = device, model = model, weights_path = weight)
-
-            idx = np.searchsorted(bins, pStart+pos, side='right')
-            binScores[bins[idx-1]] +=prob
-            binCounts[bins[idx-1]] +=1                    
-    return binScores, binCounts
-
-def writeBedGraph(bedGraphHeader, binScores, binCounts, binSize, chrom, outfile):
-    outFh = open(outfile, 'w')
-    for k,v in bedGraphHeader.items():
-        if v:
-            line = k + '=' + v + ' '
-            outFh.write(line)
-    outFh.write('\n')
-    for chrStart in binScores.keys():
-        chrEnd = chrStart + binSize
-        score = "%.3f" % (binScores[chrStart]/binCounts[chrStart])
-        line = '{chr}\t{start}\t{end}\t{score}\n'.format(chr = chrom, start = chrStart,  end = chrEnd, score = score)
-        outFh.write(line)
-    outFh.close()
-
-bedGraphHeader = {'track type':'bedGraph', 
-                  'name':'chrom_bin75', 
-                  'description':'addseq',
-                  'visibility':'', 
-                  'color':'r', 
-                  'altColor':'r', 
-                  'priority':'', 
-                  'autoScale':'off', 
-                  'alwaysZero':'off', 
-                  'gridDefault':'off', 
-                  'maxHeightPixels':'default', 
-                  'graphType':'bar',
-                  'viewLimits':'upper',
-                  'yLineMark':'',
-                  'yLineOnOff':'on',
-                  'windowingFunction':'mean',
-                  'smoothingWindow':'on'
-                 }

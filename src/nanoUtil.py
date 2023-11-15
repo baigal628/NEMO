@@ -155,16 +155,17 @@ def fetchSignal(start, end, sigLenList, sigList, signalWindow):
     
     sigLenList_startIdx = start-1
     sigLenList_endIdx = end
-
+    # print(sigLenList_startIdx, sigLenList_endIdx)
+    # print(len(sigLenList))
     # if start=0
     if sigLenList_startIdx<0:
         sigList_startIdx = 0
-    elif sigLenList_startIdx>len(sigLenList):
+    elif sigLenList_startIdx >= len(sigLenList):
         return 'end'
     else:
         sigList_startIdx = int(sigLenList[sigLenList_startIdx])
     
-    if sigLenList_endIdx > len(sigLenList):
+    if sigLenList_endIdx >= len(sigLenList):
         sigLenList_endIdx = -1
     sigList_endIdx = int(sigLenList[sigLenList_endIdx])
 
