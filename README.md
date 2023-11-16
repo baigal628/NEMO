@@ -72,7 +72,7 @@ python3 ./findNemo.py
     --threads 8
 ```
 
-## 1. plot modified regions using prediction file
+## 2. plot modified regions using prediction file
 ```{bash}
 python3 ./findNemo.py
     --mode plot \

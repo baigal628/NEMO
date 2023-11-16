@@ -85,6 +85,8 @@ def plotGtfTrack(plot, gtfFile, region,
     chrom = region.split(':')[0]
     locus = region.split(':')[1].split('-')
     startPlot, endPlot = int(locus[0]), int(locus[1])
+    prange = endPlot-startPlot
+    adjust_features[1] = prange/100
     features, sorted_gtfReads = readGTF(gtfFile, chromPlot = chrom.split('chr')[1], 
                                         genePlot = 'gene_name',
                                         startPlot = startPlot, endPlot = endPlot, features = features)
@@ -379,8 +381,51 @@ def plotModTrack(plot, prediction, region, bins, step, outpath, prefix,
     if label_strand:
         plot.set_yticks(ticks= tick_yaxis, labels = tick_strand)
 
+def plotbdgTrack(plot, bdg, region, step = 1, scale = 1000, header = False, col = 'grey', annot = '', ylim = ''):
+    
+    chrom = region.split(':')[0]
+    locus = region.split(':')[1].split('-')
+    pstart, pend = int(locus[0]), int(locus[1])
+    ymax = 0
+    
+    print('plotting ' , bdg,  '...')
+    with open(bdg, 'r') as bdgFh:
+        if header:
+            header = bdgFh.readlines(1)
+        for line in bdgFh:
+            line = line.strip().split('\t')
+            if line[0] != chrom:
+                continue
+            start = int(line[1])
+            end =  int(line[2])
+            if end < pstart:
+                continue
+            elif start > pend:
+                break
+            else:
+                prob = float(line[3])
+                height = min(1.0, prob/scale)
+                if height > ymax:
+                    ymax = height
+                left = max(start, pstart)
+                rectangle = mplpatches.Rectangle([left, 0], end-left, height,
+                        facecolor = col,
+                        edgecolor = 'grey',
+                        linewidth = 0)
+                plot.add_patch(rectangle)
+    
+    plot.set_xlim(pstart, pend)
+    if ylim:
+        plot.set_ylim(0,ylim+0.1)
+    plot.set_ylim(0,ymax+0.1)
+    plot.tick_params(bottom=False, labelbottom=False,
+                   left=False, labelleft=False,
+                   right=False, labelright=False,
+                   top=False, labeltop=False)
+    plot.set_ylabel(annot)
+    print('Finished plotting ' , bdg,  '!')
 
-def plotAllTrack(prediction, gtf, region, bins, step, outpath, prefix, plot_ctrl=False, 
+def plotAllTrack(prediction, gtf, refbdg, predbdg, region, bins, step, outpath, prefix, threashold, plot_ctrl=False,
                  figureWidth=5, figureHeight=7, panelWidth=4, panelHeight=1.5):
     if plot_ctrl:
         plt.figure(figsize=(figureWidth,figureHeight))
@@ -397,7 +442,9 @@ def plotAllTrack(prediction, gtf, region, bins, step, outpath, prefix, plot_ctrl
         panel2 = plt.axes([0.5/figureWidth, 2.35/figureHeight, panelWidth/figureWidth, panelHeight/4.6/figureHeight])
         panel3 = plt.axes([0.5/figureWidth, 0.2/figureHeight, panelWidth/figureWidth, panelHeight*1.4/figureHeight])
         plotGtfTrack(plot = panel0, region = region, gtfFile = gtf)
-        plotModTrack(plot=panel3, prediction=prediction, region=region, bins=bins, step=step, outpath=outpath, prefix=prefix)
+        plotbdgTrack(panel1, refbdg, region, col = 'grey', header = False, annot = 'MNase-seq')
+        plotbdgTrack(panel2, predbdg, region, step = 40, scale=1, col = 'b', header = True, annot = 'Addseq')
+        plotModTrack(plot=panel3, prediction=prediction, region=region, bins=bins, step=step, outpath=outpath, prefix=prefix, threashold=threashold)
     return plt
 
 
@@ -531,5 +578,3 @@ def plotROC(scores, true_lables):
         ax.set_ylabel("True Positive Rate")
         ax.legend(loc="lower right")
     plt.tight_layout()
-
-
