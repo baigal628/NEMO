@@ -1,4 +1,7 @@
-# NEMO: a NEural network model for mapping MOdifications in nanopore Long-read
+# NEMO: a NEural network model for mapping MOdifications in nanopore Long-read 
+<p align="left">
+<img src="./md/nemo_logo.png" width="200"/>
+</p>
 
 # Utilities
 ```{python}
