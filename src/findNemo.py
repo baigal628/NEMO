@@ -37,7 +37,7 @@ parser.add_argument('--threshold', '-threshold', default=0.6, type=float, action
 parser.add_argument('--prediction', '-pred', default = '', type=str, action='store', help='path to prediction file from modification prediction results.')
 parser.add_argument('--gtf', '-gtf', default = '', type=str, action='store', help='path to General Transfer Format (GTF) file.')
 parser.add_argument('--refbdg', '-rbdg', default = '', type=str, action='store', help='path to ground truth ot short read bedgraph.')
-parser.add_argument('--predbdg', '-rbdg', default = '', type=str, action='store', help='path to aggregated prediction bedgraph from predToBedGraph call.')
+parser.add_argument('--predbdg', '-pbdg', default = '', type=str, action='store', help='path to aggregated prediction bedgraph from predToBedGraph call.')
 parser.add_argument('--pregion', '-pregion', default = '', type=str, action='store', help='region to plot. Can be gene name of the pre defined gene regions.')
 
 
