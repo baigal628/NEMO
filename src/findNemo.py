@@ -198,4 +198,4 @@ if __name__ == '__main__':
             myprediction.predToBedGraph(args.prediction, args.threshold)
 
     elif args.mode == 'plot':
-        myprediction.plotTrack(args.prediction, args.gtfFile, args.refbdg, args.predbdg, args.pregion, args.threshold)
+        myprediction.plotTrack(args.prediction, args.gtf, args.refbdg, args.predbdg, args.pregion, args.threshold)
