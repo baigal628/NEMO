@@ -35,7 +35,7 @@ def nntPredict(signals, device, model, weights, signalWindow = 400, method = 'me
     
     return aggregate_scors(probs, method = method)
 
-def tune_siganl(sigList, min_val=50, max_val=130):
+def tune_signal(sigList, min_val=50, max_val=130):
     new_sigList = [max(min_val, min(max_val, float(signal))) for signal in sigList]
     return new_sigList
 

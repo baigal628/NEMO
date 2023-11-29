@@ -17,7 +17,7 @@ from resnet1d import ResNet1D
 from nanopore_convnet import NanoporeConvNet
 from nanopore_dataset import create_sample_map
 from nanopore_dataset import create_splits
-from nanopore_dataset import load_csv
+from nanopore_dataset import load_sigalign
 from nanopore_dataset import NanoporeDataset
 from nanopore_transformer import NanoporeTransformer
 
@@ -27,14 +27,14 @@ from nanopore_transformer import NanoporeTransformer
 parser = argparse.ArgumentParser()
 parser.add_argument('--exp_id', default='test')
 parser.add_argument('--device', default='cuda:0')
-parser.add_argument('--neg_data', default='data/mesmlr/reprocessed-neg.eventalign.signal.csv')
-parser.add_argument('--pos_data', default='data/mesmlr/reprocessed-pos.eventalign.signal.csv')
+parser.add_argument('--neg_data', default='')
+parser.add_argument('--pos_data', default='')
 parser.add_argument('--seq_len', type=int, default=400)
 parser.add_argument('--min_val', type=float, default=50) # Used to clip outliers
 parser.add_argument('--max_val', type=float, default=130) # Used to clip outliers
 parser.add_argument('--train_split', type=float, default=0.8)
 parser.add_argument('--val_split', type=float, default=0.2)
-parser.add_argument('--batch_size', type=int, default=64)
+parser.add_argument('--batch_size', type=int, default=128)
 parser.add_argument('--epochs', type=int, default=100)
 parser.add_argument('--steps_per_epoch', type=int, default=1000)
 parser.add_argument('--val_steps_per_epoch', type=int, default=1000)
@@ -45,48 +45,56 @@ parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--momentum', type=float, default=0.9)
 parser.add_argument('--patience', type=int, default=10)
 parser.add_argument('--max_seqs', type=int, default=None)
+parser.add_argument('--outpath', type=str, default='')
 args = parser.parse_args()
 
+# Set device
+if args.device == 'auto':
+    device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+else:
+    device = args.device
+print('Device type:', device)
 
 # Set results file names
-best_model_fn = f'best_models/{args.exp_id}.pt'
-metrics_fn = f'results/{args.exp_id}.csv'
+best_model_fn = f'{args.outpath}/best_models/{args.exp_id}_{args.model_type}_{args.lr}.pt'
+best_model_accuracy_fn = f'{args.outpath}/results/{args.exp_id}_{args.model_type}_{args.lr}_best_model.csv'
+metrics_fn = f'{args.outpath}/results/{args.exp_id}_{args.model_type}_{args.lr}.csv'
 
 # Prepare data for training
 print("Preparing unmodified...")
 print("Loading csv...")
-unmodified_sequences = load_csv(args.neg_data,
-                                min_val=args.min_val,
-                                max_val=args.max_val,
-                                max_sequences=args.max_seqs)
+unmodified_sequences = load_sigalign(args.neg_data,
+                                     min_val=args.min_val,
+                                     max_val=args.max_val,
+                                     max_sequences=args.max_seqs)
 print("Creating sample map...")
 unmodified_sample_map = create_sample_map(unmodified_sequences,
                                           seq_len=args.seq_len)
 
 print("Creating splits...")
 unmodified_train, unmodified_val, unmodified_test = create_splits(
-        unmodified_sequences, unmodified_sample_map, seq_len=args.seq_len, shuffle=False)
+        unmodified_sequences, unmodified_sample_map, seq_len=args.seq_len, shuffle=True)
 print("Prepared.")
 
 print("Preparing modified...")
 print("Loading csv...")
-modified_sequences = load_csv(args.pos_data,
-                              min_val=args.min_val,
-                              max_val=args.max_val,
-                              max_sequences=args.max_seqs)
+modified_sequences = load_sigalign(args.pos_data,
+                                   min_val=args.min_val,
+                                   max_val=args.max_val,
+                                   max_sequences=args.max_seqs)
 print("Creating sample map...")
 modified_sample_map = create_sample_map(modified_sequences,
                                         seq_len=args.seq_len)
 print("Creating splits...")
 modified_train, modified_val, modified_test = create_splits(
-        modified_sequences, modified_sample_map, seq_len=args.seq_len, shuffle=False)
+        modified_sequences, modified_sample_map, seq_len=args.seq_len, shuffle=True)
 print("Prepared.")
 
 train_dataset = NanoporeDataset(unmodified_sequences,
                                 unmodified_train,
                                 modified_sequences,
                                 modified_train,
-                                device=args.device,
+                                device=device,
                                 synthetic=False,
                                 seq_len=args.seq_len)
 
@@ -94,7 +102,7 @@ val_dataset = NanoporeDataset(unmodified_sequences,
                               unmodified_val,
                               modified_sequences,
                               modified_val,
-                              device=args.device,
+                              device=device,
                               synthetic=False,
                               seq_len=args.seq_len)
 
@@ -102,7 +110,7 @@ test_dataset = NanoporeDataset(unmodified_sequences,
                                unmodified_test,
                                modified_sequences,
                                modified_test,
-                               device=args.device,
+                               device=device,
                                synthetic=False,
                                seq_len=args.seq_len)
 
@@ -121,7 +129,7 @@ test_dataloader = DataLoader(test_dataset,
 
 assert args.model_type in ['convnet', 'resnet', 'transformer', 'phys']
 if args.model_type == 'convnet':
-    model = NanoporeConvNet(input_size=args.seq_len).to(args.device)
+    model = NanoporeConvNet(input_size=args.seq_len).to(device)
     summary(model, (1, 400))
 elif args.model_type == 'resnet':
     model = ResNet1D(
@@ -134,13 +142,13 @@ elif args.model_type == 'resnet':
                 n_classes=2,
                 downsample_gap=2,
                 increasefilter_gap=4,
-                use_do=False).to(args.device)
+                use_do=False).to(device)
     summary(model, (1, 400))
 elif args.model_type == 'transformer':
     model = NanoporeTransformer(d_model=128,
                                 dim_feedforward=256,
                                 n_layers=6,
-                                n_head=8).to(args.device)
+                                n_head=8).to(device)
 elif args.model_type == 'phys':
     model = ResNet1D(
                 in_channels=1,
@@ -152,7 +160,7 @@ elif args.model_type == 'phys':
                 n_classes=2,
                 downsample_gap=6,
                 increasefilter_gap=12,
-                use_do=False).to(args.device)
+                use_do=False).to(device)
     summary(model, (1, 400))
 
 print("Created model and moved to device")
@@ -199,8 +207,8 @@ for epoch in range(args.epochs):
     for step, (sample, label) in enumerate(train_dataloader):
 
         # Run batch
-        sample.to(args.device)
-        label.to(args.device)
+        sample.to(device)
+        label.to(device)
         model.zero_grad()
         pred = model(sample)
         loss = loss_function(pred, label)
@@ -242,8 +250,8 @@ for epoch in range(args.epochs):
         for step, (sample, label) in tqdm(enumerate(val_dataloader)):
 
             # Run batch
-            sample.to(args.device)
-            label.to(args.device)
+            sample.to(device)
+            label.to(device)
             pred = model(sample)
             loss = loss_function(pred, label)
 
@@ -273,6 +281,9 @@ for epoch in range(args.epochs):
             best_val_acc = val_acc
             print(f'New best val acc: {best_val_acc}')
             torch.save(model.state_dict(), best_model_fn)
+            with open(best_model_accuracy_fn, 'w') as accuracy_fn:
+                accuracy_fn.write('train_loss\ttrain_acc\tval_loss\tval_acc\n')
+                accuracy_fn.write('{train_loss}\t{train_acc}\t{val_loss}\t{val_acc}\n'.format(train_loss = train_loss, train_acc = train_acc, val_loss = val_loss, val_acc = val_acc))
             print('Model saved.')
 
         # Record metrics

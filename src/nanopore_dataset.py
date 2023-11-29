@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
-
+from nntUtil import tune_signal
 
 # Load all data into sequences
 def load_csv(filename,
@@ -29,6 +29,21 @@ def load_csv(filename,
                 if max_sequences is not None:
                     if len(sequences) == max_sequences:
                         break
+    return sequences
+
+def load_sigalign(filename,
+             min_val=50,
+             max_val=130,
+             max_sequences=None):
+    sequences = []
+    with open(filename, 'r') as sigFile:
+        for line in tqdm(sigFile):
+            line = line.strip().split('\t')
+            signals = tune_signal(sigList = line[3].split(','), min_val=min_val, max_val=max_val)
+            sequences.append(signals)
+            if max_sequences is not None:
+                if len(sequences) == max_sequences:
+                    break
     return sequences
 
 

@@ -11,7 +11,7 @@ import multiprocessing
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--mode', '-mode', type=str, action='store', help='two modes available: [predict, plot]')
+parser.add_argument('--mode', '-mode', type=str, action='store', help='three modes available: [train, predict, plot]')
 # class input
 parser.add_argument('--region', '-r', type=str, action='store', help='genomic coordinates to perform modification predictions. E.g. chrI:2000-5000 or chrI.')
 parser.add_argument('--bam', '-b', type=str, action='store', help='sorted, indexed, and binarized alignment file.')
@@ -76,13 +76,19 @@ class findNemo:
         self.outpath = outpath
         self.prefix = prefix
         self.step = step
-        self.bins = np.arange(self.qStart, self.qEnd, self.step)
+        
+        if isinstance(self.chrom, list):
+            self.bins = {}
+            for i in range(len(self.chrom)):
+                self.bins[self.chrom[i]] = np.arange(self.qStart[i], self.qEnd[i], self.step)
+        else:    
+            self.bins = np.arange(self.qStart, self.qEnd, self.step)
 
         # Index reads to avoid storing the long readnames. 
         self.reads = {r:i for r,i in zip(self.alignment, range(len(self.alignment)))}
         self.alignment = {self.reads[r]:self.alignment[r] for r in self.reads}
 
-        # Store the id index match into a file.
+        # Store the readname index match into a file.
         readFh = open(outpath + prefix + '_' + region + '_readID.tsv', 'w')
         for k,v in self.reads.items(): readFh.write('{read}\t{index}\n'.format(read = k, index = v))
         readFh.close()
@@ -171,9 +177,9 @@ class findNemo:
     def predToBedGraph(self, prediction, threashold):
         
         bdgOut = self.outpath + self.prefix + '_'  + str(self.region) + '_' + str(threashold) + '_prediction.bedgraph'
+        
         print('Writing summarized prediction output to ', bdgOut, '...')
-        predictionToBedGraph(prediction, self.bins, self.step, threashold, self.chrom, self.qStart, 
-                     self.qEnd, self.prefix, outfile=bdgOut)
+        predictionToBedGraph(prediction, self.bins, self.step, threashold, self.chrom, self.qStart, self.qEnd, self.prefix, outfile=bdgOut)
         print('Done exporitng bedgraph.')
     
     def plotTrack(self, prediction, gtf, refBdg, predBdg, pregion, threashold):
@@ -189,12 +195,14 @@ class findNemo:
 
 if __name__ == '__main__':
     myprediction = findNemo(args.region, args.bam, args.genome, args.outpath, args.prefix, args.eventalign, args.sigalign, args.step)
-    if args.mode not in ['predict', 'plot']:
-        print('mode is not specified.')
-    if args.mode == 'predict':
+    assert args.mode in ['train', 'predict', 'plot']
+    if args.mode == 'train':
+        print('Done Training!')
+    elif args.mode == 'predict':
         if not args.prediction:
             myprediction.modPredict(args.model, args.weight, args.threads, args.kmerWindow, args.signalWindow, args.load)
         else:
+            print('Writing prediction to bedgraph...')
             myprediction.predToBedGraph(args.prediction, args.threshold)
 
     elif args.mode == 'plot':
