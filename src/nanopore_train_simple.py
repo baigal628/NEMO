@@ -29,6 +29,12 @@ parser.add_argument('--exp_id', default='test')
 parser.add_argument('--device', default='cuda:0')
 parser.add_argument('--neg_data', default='')
 parser.add_argument('--pos_data', default='')
+parser.add_argument('--neg_train', default='')
+parser.add_argument('--pos_train', default='')
+parser.add_argument('--neg_val', default='')
+parser.add_argument('--pos_val', default='')
+parser.add_argument('--neg_seq', default='')
+parser.add_argument('--pos_seq', default='')
 parser.add_argument('--seq_len', type=int, default=400)
 parser.add_argument('--min_val', type=float, default=50) # Used to clip outliers
 parser.add_argument('--max_val', type=float, default=130) # Used to clip outliers
@@ -60,35 +66,58 @@ best_model_fn = f'{args.outpath}/best_models/{args.exp_id}_{args.model_type}_{ar
 best_model_accuracy_fn = f'{args.outpath}/results/{args.exp_id}_{args.model_type}_{args.lr}_best_model.csv'
 metrics_fn = f'{args.outpath}/results/{args.exp_id}_{args.model_type}_{args.lr}.csv'
 
-# Prepare data for training
-print("Preparing unmodified...")
-print("Loading csv...")
-unmodified_sequences = load_sigalign(args.neg_data,
-                                     min_val=args.min_val,
-                                     max_val=args.max_val,
-                                     max_sequences=args.max_seqs)
-print("Creating sample map...")
-unmodified_sample_map = create_sample_map(unmodified_sequences,
-                                          seq_len=args.seq_len)
+# unmodified input data
+if args.neg_data:
+    # Prepare data for training
+    print("Preparing unmodified...")
+    print("Loading csv...")
+    unmodified_sequences = load_sigalign(args.neg_data,
+                                        min_val=args.min_val,
+                                        max_val=args.max_val,
+                                        max_sequences=args.max_seqs)
+    print("Creating sample map...")
+    unmodified_sample_map = create_sample_map(unmodified_sequences,
+                                            seq_len=args.seq_len)
 
-print("Creating splits...")
-unmodified_train, unmodified_val, unmodified_test = create_splits(
-        unmodified_sequences, unmodified_sample_map, seq_len=args.seq_len, shuffle=True)
-print("Prepared.")
+    print("Creating splits...")
+    unmodified_train, unmodified_val, unmodified_test = create_splits(
+            unmodified_sequences, unmodified_sample_map, seq_len=args.seq_len, shuffle=True)
+    print("Prepared.")
+    del unmodified_sample_map
 
-print("Preparing modified...")
-print("Loading csv...")
-modified_sequences = load_sigalign(args.pos_data,
-                                   min_val=args.min_val,
-                                   max_val=args.max_val,
-                                   max_sequences=args.max_seqs)
-print("Creating sample map...")
-modified_sample_map = create_sample_map(modified_sequences,
-                                        seq_len=args.seq_len)
-print("Creating splits...")
-modified_train, modified_val, modified_test = create_splits(
-        modified_sequences, modified_sample_map, seq_len=args.seq_len, shuffle=True)
-print("Prepared.")
+elif args.neg_train:
+    print("Reading unmodified...")
+    unmodified_sequences = torch.load(args.neg_seq)
+    unmodified_train = torch.load(args.neg_train)
+    unmodified_val = torch.load(args.neg_val)
+else:
+    print('No unmodified data provided!')
+
+# modified input data
+if args.pos_data:
+    print("Preparing modified...")
+    print("Loading csv...")
+    modified_sequences = load_sigalign(args.pos_data,
+                                    min_val=args.min_val,
+                                    max_val=args.max_val,
+                                    max_sequences=args.max_seqs)
+    print("Creating sample map...")
+    modified_sample_map = create_sample_map(modified_sequences,
+                                            seq_len=args.seq_len)
+    print("Creating splits...")
+    modified_train, modified_val, modified_test = create_splits(
+            modified_sequences, modified_sample_map, seq_len=args.seq_len, shuffle=True)
+    print("Prepared.")
+
+    del modified_sample_map
+
+elif args.pos_train:
+    print("Reading modified...")
+    modified_sequences = torch.load(args.pos_seq)
+    modified_train = torch.load(args.pos_train)
+    modified_val = torch.load(args.pos_val)
+else:
+    print('No modified data provided!')
 
 train_dataset = NanoporeDataset(unmodified_sequences,
                                 unmodified_train,
@@ -97,6 +126,7 @@ train_dataset = NanoporeDataset(unmodified_sequences,
                                 device=device,
                                 synthetic=False,
                                 seq_len=args.seq_len)
+del unmodified_train, modified_train
 
 val_dataset = NanoporeDataset(unmodified_sequences,
                               unmodified_val,
@@ -105,14 +135,17 @@ val_dataset = NanoporeDataset(unmodified_sequences,
                               device=device,
                               synthetic=False,
                               seq_len=args.seq_len)
+del unmodified_val, modified_val
 
-test_dataset = NanoporeDataset(unmodified_sequences,
-                               unmodified_test,
-                               modified_sequences,
-                               modified_test,
-                               device=device,
-                               synthetic=False,
-                               seq_len=args.seq_len)
+# test_dataset = NanoporeDataset(unmodified_sequences,
+#                                unmodified_test,
+#                                modified_sequences,
+#                                modified_test,
+#                                device=device,
+#                                synthetic=False,
+#                                seq_len=args.seq_len)
+# del unmodified_test, modified_test
+del unmodified_sequences, modified_sequences
 
 train_dataloader = DataLoader(train_dataset,
                               batch_size=args.batch_size,
@@ -120,9 +153,9 @@ train_dataloader = DataLoader(train_dataset,
 val_dataloader = DataLoader(val_dataset,
                             batch_size=args.batch_size,
                             shuffle=True)
-test_dataloader = DataLoader(test_dataset,
-                             batch_size=args.batch_size,
-                             shuffle=False)
+# test_dataloader = DataLoader(test_dataset,
+#                              batch_size=args.batch_size,
+#                              shuffle=False)
 
 
 # Create model
@@ -297,4 +330,3 @@ for epoch in range(args.epochs):
             'train_acc': train_accs,
             'val_acc': val_accs})
         metrics_df.to_csv(metrics_fn)
-

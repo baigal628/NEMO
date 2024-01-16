@@ -129,11 +129,13 @@ def parseSigAlign(sigalign, alignment):
             line = line.strip().split('\t')
             readID = int(line[0])
             # eventStart = int(line[2])
+            if readID not in alignment:
+                continue
             sigList = line[3].split(',')
             siglenList = line[4].split(',')
-            aStart = alignment[readID][0]
-            aEnd = alignment[readID][1]
-            strand = alignment[readID][2]
+            aStart = int(alignment[readID][1])
+            aEnd = int(alignment[readID][2])
+            strand = alignment[readID][3]
 
             yield (readID, aStart, aEnd, strand, sigList, siglenList)
 

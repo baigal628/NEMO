@@ -9,8 +9,58 @@ from sklearn.cluster import KMeans
 from sklearn.impute import SimpleImputer
 from collections import defaultdict
 from sklearn.metrics import roc_curve, auc
+from sklearn.datasets import make_blobs
+from sklearn.metrics import silhouette_samples, silhouette_score
+from scipy import stats
+from sklearn.decomposition import PCA
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
-def readGTF(gtfFile, chromPlot, startPlot, endPlot, genePlot, features):
+
+def colorMap(palette):
+    if palette == 'viridis':
+        viridis5 = (253/255, 231/255, 37/255)
+        viridis4 = (94/255, 201/255, 98/255)
+        viridis3 = (33/255, 145/255, 140/255)
+        viridis2 = (59/255, 82/255, 139/255)
+        viridis1 = (68/255, 1/255, 84/255)
+        R1=np.linspace(viridis1[0],viridis2[0],26)
+        G1=np.linspace(viridis1[1],viridis2[1],26)
+        B1=np.linspace(viridis1[2],viridis2[2],26)
+        R2=np.linspace(viridis2[0],viridis3[0],26)
+        G2=np.linspace(viridis2[1],viridis3[1],26)
+        B2=np.linspace(viridis2[2],viridis3[2],26)
+        R3=np.linspace(viridis3[0],viridis4[0],26)
+        G3=np.linspace(viridis3[1],viridis4[1],26)
+        B3=np.linspace(viridis3[2],viridis4[2],26)
+        R4=np.linspace(viridis4[0],viridis5[0],26)
+        G4=np.linspace(viridis4[1],viridis5[1],26)
+        B4=np.linspace(viridis4[2],viridis5[2],26)
+        R=np.concatenate((R1[:-1],R2[:-1],R3[:-1],R4),axis=None)
+        G=np.concatenate((G1[:-1],G2[:-1],G3[:-1],G4),axis=None)
+        B=np.concatenate((B1[:-1],B2[:-1],B3[:-1],B4),axis=None)
+        return (R,G,B)
+    
+    elif palette == 'plasma':
+        plasma5 = (237/255, 252/255, 27/255)
+        plasma4 = (245/255, 135/255, 48/255)
+        plasma3 = (190/255, 48/255, 101/255)
+        plasma2 = (87/255, 0/255, 151/255)
+        plasma1 = (15/255, 0/255, 118/255)
+        plasma = [plasma1, plasma2, plasma3, plasma4, plasma5]
+        
+        colorCode = {'R': 0 , 'G': 1, 'B' : 2}
+        myRGB = {'R':[] , 'G': [], 'B': []}
+        
+        for i in range(len(plasma)-1):
+            step =25
+            if i == 3:
+                step =26
+            for code in colorCode.keys():
+                col = np.linspace(plasma[i][colorCode[code]], plasma[i+1][colorCode[code]], step)
+                myRGB[code].extend(col)
+        return (myRGB['R'],myRGB['G'],myRGB['B'])
+
+def readGTF(gtfFile, chromPlot, startPlot, endPlot, genePlot, geneSlot, features):
 
     gtfReads = {}
     gene = ''
@@ -30,8 +80,8 @@ def readGTF(gtfFile, chromPlot, startPlot, endPlot, genePlot, features):
                     continue
                 else:
                     if feature in features:
-                        splitPoint = str(genePlot) + ' "'
-                        transcript = line[8].split(';')[3]
+                        splitPoint = str(genePlot[feature]) + ' "'
+                        transcript = line[8].split(';')[geneSlot[feature]]
                         if splitPoint not in transcript:
                             continue
                         geneID = transcript.split(splitPoint)[1].split('"')[0]
@@ -76,19 +126,109 @@ def readGTF(gtfFile, chromPlot, startPlot, endPlot, genePlot, features):
     sorted_gtfReads = dict(sorted(gtfReads.items(), key = lambda x:x[1]['start']))
     return (features, sorted_gtfReads)
 
-def plotGtfTrack(plot, gtfFile, region,
-                 features = ['CDS', 'start_codon'], adjust_features = [0, 0.25],
-                 label_name = True, label_direction = False, colorpalates= ['orange', 'blue'], 
-                 thinHeight = 0.2, thickHeight = 0.8, line_width = 0):
+def predToMtx(infile, pregion, bins, outpath = '', prefix = '', step = 40, impute = True, 
+              strategy = 'most_frequent', filter_read = True, write_out = True):
+
+    '''
+    predToMtx function formats input prediction tsv file into an matrix.
+    
+    input:
+        prediction file
+        outpath
+        prefix
+        region
+        pregion
+        step
+        inpute
+        strategy
+        filter_read
+    output:
+        output matrix file
+    return:
+        readnames
+        strands
+    '''
+    chrom = pregion.split(':')[0]
+    locus = pregion.split(':')[1].split('-')
+    pstart, pend = int(locus[0]), int(locus[1])
+    rstart = int(np.floor((pstart-bins[0])/40))
+    rend = int(np.ceil((pend-bins[0])/40))
+    
+    outfile = outpath + prefix + '_' + pregion + '.mtx'
+    readnames = []
+    strands = []
+    mtx = []
+    
+    with open(infile, 'r') as predFh:
+        for line in predFh:
+            bin_scores = np.empty(len(bins), dtype = float) * np.nan
+            line = line.strip().split('\t')
+            readname = line[0]
+            strand = line[1]
+            start = int(line[2])
+            if start > bins[-1]:
+                continue
+            probs = line[3].split(',')
+            end = start + step*(len(probs)-1)
+            if end < bins[0]:
+                continue
+            else:
+                i = int((start-bins[0])/step)
+                if i < 0:
+                    probs = probs[-i:]
+                    i = 0
+                for prob in probs:
+                    bin_scores[i] = prob
+                    i +=1
+                    if i >= len(bins):
+                        break
+            readnames.append(readname)
+            strands.append(strand)
+            mtx.append(bin_scores)
+
+    mtx = np.array(mtx, dtype = float)  
+    mtx = mtx[:,rstart:rend]
+    bins = bins[rstart:rend]
+    readnames = np.array(readnames, dtype = int)
+    strands = np.array(strands, dtype = int)
+    
+    if filter_read:
+        little_na = np.invert(np.isnan(mtx).sum(axis = 1)>(mtx.shape[1]/2))
+        mtx = mtx[little_na,:]
+        readnames = readnames[little_na]
+        strands = strands[little_na]
+    
+    if impute: 
+        imp = SimpleImputer(missing_values=np.nan, strategy=strategy)
+        mtx = imp.fit_transform(mtx)
+    
+    if write_out:
+        print('writing output to file: ', outfile)
+        mtxFh = open(outfile, 'w')
+        mtxFh.write(','.join(np.array(bins, dtype = str)) + '\n')
+        for binscore in mtx:
+            mtxFh.write(','.join(np.array(binscore, dtype = str)) + '\n')
+        mtxFh.close()
+    
+    if np.isnan(mtx).sum() != 0:
+        print('nan in output matrix!')
+
+    return np.array(readnames), np.array(strands), np.array(mtx), bins
+
+def plotGtfTrack(plot, gtfFile, region, features = ['CDS', 'start_codon'], genePlot = {'CDS': 'gene_name', 'start_codon': 'gene_name'}, 
+                 geneSlot = {'CDS': 3, 'start_codon': 3}, adjust_features = '', label_name = True, label_direction = False, 
+                 colorpalates= ['royalblue', 'darkorange'], thinHeight = 0.2, Height = [0.8, 0.8], line_width = 0):
     
     
     chrom = region.split(':')[0]
     locus = region.split(':')[1].split('-')
     startPlot, endPlot = int(locus[0]), int(locus[1])
     prange = endPlot-startPlot
-    adjust_features[1] = prange/100
+    if not adjust_features:
+        adjust_features = [0, 0]
+        adjust_features[1] = prange/100
     features, sorted_gtfReads = readGTF(gtfFile, chromPlot = chrom.split('chr')[1], 
-                                        genePlot = 'gene_name',
+                                        genePlot = genePlot, geneSlot = geneSlot, 
                                         startPlot = startPlot, endPlot = endPlot, features = features)
     
     print('plotting gene annotations...')
@@ -129,8 +269,9 @@ def plotGtfTrack(plot, gtfFile, region,
             for index in range(len(blockStarts)):
                 blockStart = blockStarts[index]
                 blockEnd = blockEnds[index]
-                rectangle = mplpatches.Rectangle([blockStart-adjust_features[0], bottom-(thickHeight/2)],
-                                                 blockEnd-blockStart+adjust_features[0], thickHeight,
+                print(Height[0])
+                rectangle = mplpatches.Rectangle([blockStart-adjust_features[0], bottom-(Height[0]/2)],
+                                                 blockEnd-blockStart+adjust_features[0], Height[0],
                                     facecolor = colorpalates[0],
                                     edgecolor = 'black',
                                     linewidth = line_width)
@@ -138,14 +279,13 @@ def plotGtfTrack(plot, gtfFile, region,
         
         # plot feature2
         if features[1] in sorted_gtfReads[transID]:
-            Height = 0.5
             blockStarts = np.array(sorted_gtfReads[transID][features[1]][0], dtype = int)
             blockEnds = np.array(sorted_gtfReads[transID][features[1]][1], dtype = int)
             for index in range(0, len(blockStarts), 1):
                 blockStart = blockStarts[index]
                 blockEnd = blockEnds[index]
-                rectangle = mplpatches.Rectangle([blockStart-adjust_features[1], bottom-(thickHeight/2)], 
-                                                 blockEnd-blockStart+adjust_features[1], thickHeight,
+                rectangle = mplpatches.Rectangle([blockStart-adjust_features[1], bottom-(Height[1]/2)], 
+                                                 blockEnd-blockStart+adjust_features[1], Height[1],
                                     facecolor = colorpalates[1],
                                     edgecolor = 'black',
                                     linewidth = line_width)
@@ -158,52 +298,119 @@ def plotGtfTrack(plot, gtfFile, region,
                    right=False, labelright=False,
                    top=False, labeltop=False)
 
-def clusterRead(mtx, readname, outpath, prefix, strand, n_clusters, 
-                show_elbow = False, return_cluster = True, print_inertia = False, print_iterations = False):
+def clusterRead(predict, outpath, prefix, region, pregion, bins, n_cluster = '', random_state = 42, method = '', show_elbow = True, nPC= 15):
+    '''
     
+    ClusterRead function takes a modification prediction file as input and do clustering on reads.
     
-    outfile = open(outpath + prefix  +'_clustering' + str(strand) + '.tsv', 'w')
-    outfile.write('readID\tcluster\n')
-    imp = SimpleImputer(missing_values=np.nan, strategy='mean')
+    input:
+        predict: modification prediction tsv generated from modPredict function.
+        prefix: output file prefix
+        outpath: output path
+        n_cluster: number of clusters
+        random_state
+        method
+    output:
+        outfile: a tsv file with clustering results.
+    return:
+        cluster_labels
+    '''
+    
+    print('preprocessing input matrix...')
+    if method == 'pca':
+        print('Reading prediction file and outputing matrix...')
+        prefix = prefix + "_method_pca_"
+        readnames, strands, mtx, bins = predToMtx(infile=predict, pregion=pregion, bins=bins, outpath=outpath, prefix=prefix)
+        print('running pca...')
+        pca = PCA(n_components=5)
+        new_mtx = pca.fit(mtx).transform(mtx)
+        
+        rel_height = 1.2
+        rel_width = 1.2
+        lw = 0
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(5 * rel_width, 5 * rel_height))
+        
+        ax1.scatter(new_mtx[:, 0], new_mtx[:, 1], color='orange', alpha=1, lw=lw)
+        ax1.set_xlabel('PC0')
+        ax1.set_ylabel('PC1')
+        
+        ax2.scatter(new_mtx[:, 1], new_mtx[:, 2], color='orange', alpha=1, lw=lw)
+        ax2.set_xlabel('PC1')
+        ax2.set_ylabel('PC2')
+        
+        ax3.scatter(new_mtx[:, 2], new_mtx[:, 3], color='orange', alpha=1, lw=lw)
+        ax3.set_xlabel('PC2')
+        ax3.set_ylabel('PC3')
+        
+        ax4.scatter(new_mtx[:, 3], new_mtx[:, 4], color='orange', alpha=1, lw=lw)
+        ax4.set_xlabel('PC3')
+        ax4.set_ylabel('PC4')
+        plt.subplots_adjust(wspace=0.35, hspace=0.35)
+        plt.savefig(outpath + prefix + region + "_pca.pdf")
+        plt.close()
+        
+    elif method == 'cor':
+        print('Reading prediction file and outputing matrix...')
+        prefix = prefix + "_method_cor_"
+        readnames, strands, mtx, bins = predToMtx(infile=predict, pregion=pregion, bins=bins, outpath=outpath, prefix=prefix, impute=False)
+        res = stats.spearmanr(mtx, axis = 1, nan_policy = 'omit')
+        new_mtx = res.statistic
 
-    print('Imputing missing values...')
-    score_mtx = imp.fit_transform(mtx)
+    else:
+        readnames, strands, mtx, bins = predToMtx(infile=predict, pregion=pregion, bins=bins, outpath=outpath, prefix=prefix)
+        new_mtx = mtx
 
-    if show_elbow:
-        n_reads = len(readname)
+    try:
+        assert len(readnames) == mtx.shape[0]
+    except:
+        print('dimentions do not match!')
+        print('length of readnames:', len(readnames))
+        print('length of strands:', len(strands))
+        print('matrix dimension:', mtx.shape)
+
+    if not n_cluster:
         inertias = []
-
-        for i in range(1, n_reads+1):
-            kmeans = KMeans(n_clusters=i)
-            kmeans.fit(score_mtx)
-            inertias.append(kmeans.inertia_)
-
-        plt.plot(range(1,n_reads+1), inertias, marker='o')
-        plt.title('Elbow method')
-        plt.xlabel('Number of clusters')
-        plt.ylabel('Inertia')
-        plt.show()
-
+        silhouette_avgs = []
+        n_clusters = [2, 3, 4, 5, 6]
+        for n_cluster in n_clusters:
+    
+            clusterer = KMeans(n_clusters=n_cluster, random_state=random_state)
+            cluster_labels = clusterer.fit_predict(new_mtx)
+            inertias.append(clusterer.inertia_)
+            silhouette_avg = silhouette_score(new_mtx, cluster_labels)
+            silhouette_avgs.append(silhouette_avg)
+            print(
+                "For n_clusters =",
+                n_cluster,
+                "The average silhouette_score is :",
+                silhouette_avg,
+            )
+            
+        if show_elbow:
+            plt.plot(n_clusters, inertias, marker='o')
+            plt.xlabel('Number of clusters')
+            plt.ylabel('Inertia')
+        
+        n_cluster = n_clusters[np.argmax(silhouette_avgs)]
+    
+    print('Clustering with number of clusters =', n_cluster)
+    outfile = open(outpath + prefix + 'clustering.tsv', 'w')
+    outfile.write('readname\tstrand\tcluster\n')
     kmeans = KMeans(
         init="random",
-        n_clusters=n_clusters,
+        n_clusters=n_cluster,
         n_init=10,
         max_iter=300,
-        random_state=42)
+        random_state=random_state)
 
-    kmeans.fit(score_mtx)
-    if print_inertia:
-        print('inertia: ', kmeans.inertia_)
-    if print_iterations:
-        print('iterations: ', kmeans.n_iter_)
-
-    for k,v in zip(readname, kmeans.labels_):
-        line = '{}\t{}\t{}\n'.format(k, strand, v)
+    print(new_mtx[1:3,1:3])
+    kmeans.fit(new_mtx)
+    for r,s,l in zip(readnames, strands, kmeans.labels_):
+        line = '{}\t{}\t{}\n'.format(r, s, l)
         outfile.write(line)
     outfile.close()
-    
-    if return_cluster:
-        return kmeans.labels_
+
+    return kmeans.labels_, readnames, strands, mtx, bins
 
 def plotModDistribution(modPredict_pos, modPredict_neg, modPredict_chrom, return_scores = False):
     '''
@@ -257,196 +464,188 @@ def plotModDistribution(modPredict_pos, modPredict_neg, modPredict_chrom, return
     else:
         return fig
 
-def collectPred(prediction, bins, step):
-    '''
-    collectScores function reads prediction as input, filter reads mapped to the given region, modified positions and 
-    modified scores into a format that can feed into clustering algorithms.
-    '''
+
+def plotModTrack(ax, labels, readnames, strands, mtx, bins, step = 40,
+                 prefix = '', outpath = '', bottom = 0, height = 1, line_width = 0, agg_adjust = 0.4,
+                 label = '', colorRange = (0.3, 0.5, 0.6), colorPalette = 'viridis', xticks_space = 120, ylim_adjust = 0):
+
+    clustered_idx = [x for _, x in sorted(zip(labels, np.arange(0,len(readnames))))]
+    thiscluster = ''
+
+    total, count = np.zeros(len(bins), dtype = float), np.zeros(len(bins), dtype = int)
     
-    with open(prediction, 'r') as predFh:
-        readnames, mtxs = defaultdict(list), defaultdict(list) 
-        for line in predFh:
-            line = line.strip().split('\t')
-            readname = line[0]
-            strand = line[1]
-            binStart = int(line[2])
-            if binStart > bins[-1]:
-                continue
-            
-            probs = line[3].split(',')
-            binEnd = binStart + step*(len(probs)-1)
+    tick_yaxis, label_yaxis = [],[]
+    tick_clusters, label_clusters = [],[]
 
-            if binEnd < bins[0]:
-                continue
-            else:
-                thisprobs = np.zeros(len(bins))
-                i = int((binStart-bins[0])/step)
-                if i < 0:
-                    probs = probs[-i:]
-                    i = 0
-                for prob in probs:
-                    thisprobs[i]=prob
-                    i+=1
-                    if i >= len(bins):
-                        break
-                readnames[strand].append(readname)
-                mtxs[strand].append(thisprobs)
-        
-        for s in mtxs:
-            mtxs[s] = np.array(mtxs[s], dtype = float)
+    (R,G,B) = colorMap(palette = colorPalette)
+    extend = len(readnames)*agg_adjust
     
-    return dict(mtxs), dict(readnames)
-
-def plotModTrack(plot, prediction, region, bins, step, outpath, prefix,
-            cluster = True, n_clusters = 1, threashold = 0.5,
-            annot = '', label_strand = True, label_rname = False,
-            colorPalate = {'modT': 'orangered', 'modF':'dodgerblue', 'unMod': 'lightgrey'}, 
-            height = 0.8, line_width = 0, ylim = ''):
-
-    chrom = region.split(':')[0]
-    locus = region.split(':')[1].split('-')
-    pstart, pend = int(locus[0]), int(locus[1])
-    
-    pbins = bins[int(pstart/step):int(pend/step)+1]
-    print('Reading prediction files...')
-    mtxs, readnames = collectPred(prediction, pbins, step)
-    print('Finished reading prediction files.')
-    
-    tick_strand, tick_rname, tick_yaxis = [], [],[]
-    strandDict = {'-1':'-', '1': '+'}
-    bottom = 0
-    
-    for strand in mtxs:
-        mtx, readname = mtxs[strand], readnames[strand]
+    for i in clustered_idx:
         
-        try:
-            assert mtx.shape == (len(readname), len(pbins))
-        except:
-            print('dimention of score matrix does not match readname and bin length!')
-
+        left = bins[0]
         
-        sorted_readIdx = readname
-
-        if cluster:
-            print("clustering reads...")
-            label = clusterRead(mtx = mtx, readname = readname, outpath = outpath, 
-                                 prefix = prefix+'_'+region, strand = strand, n_clusters=n_clusters, show_elbow = False)
-            
-            sorted_readIdx = [x for _, x in sorted(zip(label, np.arange(0,len(readname))))]
-        
-        print('plotting modification track on', strandDict[strand], 'strand...')
-        
-        for readIdx in sorted_readIdx:
-
-            rectangle = mplpatches.Rectangle([pbins[0], bottom-(height/2)], pbins[-1], height,
-                                    facecolor = colorPalate['unMod'],
-                                    edgecolor = 'grey',
-                                    linewidth = line_width)
-            
-            plot.add_patch(rectangle)
-
+        if label == 'strand':
             tick_yaxis.append(bottom)
-
-            if label_strand:
-                tick_strand.append(strandDict[strand])
-            if label_rname:
-                tick_rname.append(readname[readIdx])
-
-            for posIdx in range(len(pbins)):
-                if mtx[readIdx,posIdx] >= threashold:
-                    color = colorPalate['modT']
-                else:
-                    color = colorPalate['modF']
-
-                left = pbins[posIdx]
-                rectangle = mplpatches.Rectangle([left, bottom-(height/2)], step, height, 
-                                                 facecolor = color, edgecolor = 'grey',
-                                                 linewidth = line_width)
-                plot.add_patch(rectangle)
-            bottom +=1
-    
-    print('finished plotting file: ', prediction)
-    
-    plot.set_xlim(pstart, pend)
-    plot.set_ylabel(annot)
-    if not ylim:
-        plot.set_ylim(-1,len(tick_yaxis))
-    else:
-        plot.set_ylim(ylim[0], ylim[1])
-    
-    plot.tick_params(bottom=False, labelbottom=False,
-                   left=True, labelleft=True,
-                   right=False, labelright=False,
-                   top=False, labeltop=False)
-    if label_strand:
-        plot.set_yticks(ticks= tick_yaxis, labels = tick_strand)
-
-def plotbdgTrack(plot, bdg, region, step = 1, scale = 1000, header = False, col = 'grey', annot = '', ylim = ''):
-    
-    chrom = region.split(':')[0]
-    locus = region.split(':')[1].split('-')
-    pstart, pend = int(locus[0]), int(locus[1])
-    ymax = 0
-    
-    print('plotting ' , bdg,  '...')
-    with open(bdg, 'r') as bdgFh:
-        if header:
-            header = bdgFh.readlines(1)
-        for line in bdgFh:
-            line = line.strip().split('\t')
-            if line[0] != chrom:
-                continue
-            start = int(line[1])
-            end =  int(line[2])
-            if end < pstart:
-                continue
-            elif start > pend:
-                break
+            label_yaxis.append(str(strands[i]))
+        elif label == 'readname':
+            tick_yaxis.append(bottom)
+            label_yaxis.append(str(readnames[i]))
+        if labels[i] != thiscluster:
+            thiscluster = labels[i]
+            label_clusters.append('c'+str(labels[i]))
+            if thiscluster:
+                count[count==0]=1
+                aggregate = total/count
+                # aggregate = ((aggregate-np.min(aggregate))/(np.max(aggregate)-np.min(aggregate)))
+                for pos in range(len(bins)):
+                    rectangle = mplpatches.Rectangle([left, bottom-height*0.5], step, aggregate[pos]*extend,
+                                                     facecolor = 'silver', edgecolor = 'black', linewidth = 0.5)
+                    ax.add_patch(rectangle)
+                    left += step
+                
+                left = bins[0]
+                total, count = np.zeros(len(bins), dtype = float), np.zeros(len(bins), dtype = int)
+                bottom +=np.max(aggregate)*extend+1
+            tick_clusters.append(bottom)
+        
+        for pos in range(len(bins)):
+            score = mtx[i, pos]
+            if np.isnan(score):
+                col = 'white'
             else:
-                prob = float(line[3])
-                height = min(1.0, prob/scale)
-                if height > ymax:
-                    ymax = height
-                left = max(start, pstart)
-                rectangle = mplpatches.Rectangle([left, 0], end-left, height,
-                        facecolor = col,
-                        edgecolor = 'grey',
-                        linewidth = 0)
-                plot.add_patch(rectangle)
+                if score >= colorRange[1]:
+                    total[pos] += 1
+                count[pos] += 1
+                color = int(score*100)
+                (lower, median, upper) = colorRange
+                if color >= upper*100:
+                    color = 100
+                elif color >= median*100:
+                    color = 80
+                elif color <= lower*100:
+                    color = 0
+                col=(R[color],G[color],B[color])
+            rectangle = mplpatches.Rectangle([left, bottom-(height*0.5)], step, height, 
+                                             facecolor = col, edgecolor = 'silver',
+                                             linewidth = line_width)
+            ax.add_patch(rectangle)
+            left += step
+        bottom +=height
     
-    plot.set_xlim(pstart, pend)
-    if ylim:
-        plot.set_ylim(0,ylim+0.1)
-    plot.set_ylim(0,ymax+0.1)
-    plot.tick_params(bottom=False, labelbottom=False,
-                   left=False, labelleft=False,
-                   right=False, labelright=False,
-                   top=False, labeltop=False)
-    plot.set_ylabel(annot)
-    print('Finished plotting ' , bdg,  '!')
+    count[count==0]=1
+    aggregate = total/count
+    left = bins[0]
+    for pos in range(len(bins)):
+        rectangle = mplpatches.Rectangle([left, bottom-height*0.5], step, aggregate[pos]*extend, 
+                                         facecolor = 'silver', edgecolor = 'black', linewidth = 0.5)
+        ax.add_patch(rectangle)
+        left += step
 
-def plotAllTrack(prediction, gtf, refbdg, predbdg, region, bins, step, outpath, prefix, threashold, plot_ctrl=False,
-                 figureWidth=5, figureHeight=7, panelWidth=4, panelHeight=1.5):
-    if plot_ctrl:
-        plt.figure(figsize=(figureWidth,figureHeight))
-        panelt = plt.axes([0.5/figureWidth, 6.1/figureHeight, panelWidth/figureWidth, panelHeight/2.5/figureHeight])
-        panel0 = plt.axes([0.5/figureWidth, 5.0/figureHeight, panelWidth/figureWidth, panelHeight/1.5/figureHeight])
-        panel1 = plt.axes([0.5/figureWidth, 3.4/figureHeight, panelWidth/figureWidth, panelHeight/figureHeight])
-        panel2 = plt.axes([0.5/figureWidth, 1.8/figureHeight, panelWidth/figureWidth, panelHeight/figureHeight])
-        panel3 = plt.axes([0.5/figureWidth, 0.2/figureHeight, panelWidth/figureWidth, panelHeight/figureHeight])
+    ax.set_xlim(bins[0], bins[1])
+    ax.set_ylim(-1.5,len(readnames)*height+extend*np.max(aggregate)*len(label_clusters)+ylim_adjust)
+    
+    ax.tick_params(
+        bottom=True, labelbottom=True,
+        left=False, labelleft=True,
+        right=False, labelright=False,
+        top=False, labeltop=False)
+    
+    ax.set_yticks(ticks= tick_clusters, labels = label_clusters)
+    ax.set_xticks(ticks= np.arange(bins[0], bins[-1], xticks_space))
+    ax.set_xticklabels(ax.get_xticks(), rotation = 50)
+
+# def plotbdgTrack(plot, bdg, region, step = 1, scale = 1000, header = False, col = 'grey', annot = '', ylim = ''):
+    
+#     chrom = region.split(':')[0]
+#     locus = region.split(':')[1].split('-')
+#     pstart, pend = int(locus[0]), int(locus[1])
+#     ymax = 0
+    
+#     print('plotting ' , bdg,  '...')
+#     with open(bdg, 'r') as bdgFh:
+#         if header:
+#             header = bdgFh.readlines(1)
+#         for line in bdgFh:
+#             line = line.strip().split('\t')
+#             if line[0] != chrom:
+#                 continue
+#             start = int(line[1])
+#             end =  int(line[2])
+#             if end < pstart:
+#                 continue
+#             elif start > pend:
+#                 break
+#             else:
+#                 prob = float(line[3])
+#                 height = min(1.0, prob/scale)
+#                 if height > ymax:
+#                     ymax = height
+#                 left = max(start, pstart)
+#                 rectangle = mplpatches.Rectangle([left, 0], end-left, height,
+#                         facecolor = col,
+#                         edgecolor = 'grey',
+#                         linewidth = 0)
+#                 plot.add_patch(rectangle)
+    
+#     plot.set_xlim(pstart, pend)
+#     if ylim:
+#         plot.set_ylim(0,ylim+0.1)
+#     plot.set_ylim(0,ymax+0.1)
+#     plot.tick_params(bottom=False, labelbottom=False,
+#                    left=False, labelleft=False,
+#                    right=False, labelright=False,
+#                    top=False, labeltop=False)
+#     plot.set_ylabel(annot)
+#     print('Finished plotting ' , bdg,  '!')
+
+def plotAllTrack(prediction, gtfFile, bins, region, pregion,
+                 outpath = '', prefix = '', ncluster = '', method = 'pca', 
+                 subset = False, colorPalette = 'viridis', colorRange = (0.3, 0.5, 0.6), vlines = '',
+                 gtfFeatures = ['CDS', 'start_codon'],  genePlot = {'CDS': 'gene_name', 'start_codon': 'gene_name'}, 
+                 geneSlot = {'CDS': 3, 'start_codon': 3}, gtfHeight = [0.8, 0.8], adjust_features = '',
+                 trackHeight = 0.5, fontsize=10, track_ylim_adjust = 0.5, track_agg_adjust = 0.4, xticks_space = 120,
+                 fig_size = '', savefig = True, dpi = 800, seed = 42):
+
+    print('Start clustering reads...')
+    labels, readnames, strands, mtx, bins = clusterRead(predict=prediction, outpath=outpath, prefix=prefix, 
+                                                  region=region, pregion=pregion, bins=bins, 
+                                                  n_cluster=ncluster, method=method, random_state=seed, show_elbow = False)
+    print('Finished clustering reads!')
+
+    if subset:
+        readIdx = np.arange(len(readnames))
+        np.random.shuffle(readIdx)
+        readlen = int(np.ceil(len(readIdx)*subset))
+        readIdx = readIdx[:readlen]
+        labels = labels[readIdx]
+        readnames = readnames[readIdx]
+        strands = strands[readIdx]
+        mtx = mtx[readIdx,]
+    if fig_size:
+        (figHeight, figWidth) = fig_size
     else:
-        plt.figure(figsize=(figureWidth,figureHeight))
-        figureHeight = figureHeight/2
-        panel0 = plt.axes([0.5/figureWidth, 3.05/figureHeight, panelWidth/figureWidth, panelHeight/3.5/figureHeight])
-        panel1 = plt.axes([0.5/figureWidth, 2.7/figureHeight, panelWidth/figureWidth, panelHeight/4.6/figureHeight])
-        panel2 = plt.axes([0.5/figureWidth, 2.35/figureHeight, panelWidth/figureWidth, panelHeight/4.6/figureHeight])
-        panel3 = plt.axes([0.5/figureWidth, 0.2/figureHeight, panelWidth/figureWidth, panelHeight*1.4/figureHeight])
-        plotGtfTrack(plot = panel0, region = region, gtfFile = gtf)
-        plotbdgTrack(panel1, refbdg, region, col = 'grey', header = False, annot = 'MNase-seq')
-        plotbdgTrack(panel2, predbdg, region, step = 40, scale=1, col = 'b', header = True, annot = 'Addseq')
-        plotModTrack(plot=panel3, prediction=prediction, region=region, bins=bins, step=step, outpath=outpath, prefix=prefix, threashold=threashold)
-    return plt
+        figHeight = len(readnames)/8
+        figWidth = len(bins)/10
+    print('Figure size:', figHeight, figWidth)
+    plt.figure(figsize = (figWidth, figHeight))
+                #(left, bottom, width, height)
+    ax1 = plt.axes((0.1, 0.2 , 0.85, 0.6), frameon=False)
+    ax2 = plt.axes((0.1, 0.8, 0.85, 0.16), frameon=False)
+    plotModTrack(ax=ax1, labels=labels, readnames=readnames, strands=strands, mtx=mtx, bins=bins, 
+                 ylim_adjust=track_ylim_adjust, agg_adjust=track_agg_adjust,
+                 colorRange = colorRange, colorPalette=colorPalette, height=trackHeight, xticks_space=xticks_space)
+    
+    plotGtfTrack(ax2, gtfFile, pregion, Height = gtfHeight, features = gtfFeatures, 
+                 genePlot = genePlot, geneSlot = geneSlot, adjust_features=adjust_features)
 
+    if vlines:
+        for label, vl in vlines.items():
+            plt.axvline(x = vl, color = 'black', linestyle = 'dashed')
+            plt.text(vl+12, 0.7, label, fontsize=fontsize)
+    
+    if savefig:
+        outfig = outpath + prefix + '_' + region + '_' + method + '_clustered_reads.pdf'
+        plt.savefig(outfig, dpi=dpi)
 
 def plotPredictionScores(scores, modVars, modCounts, labels = ['pos', 'neg', 'chrom']):
     

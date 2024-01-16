@@ -18,6 +18,8 @@ parser.add_argument('--bam', '-b', type=str, action='store', help='sorted, index
 parser.add_argument('--genome', '-g', type=str, action='store', help='reference genome fasta file')
 parser.add_argument('--eventalign', '-e', default='', type=str, action='store', help='nanopolish eventalign file.')
 parser.add_argument('--sigalign', '-s', default='', type=str, action='store', help='sigalign file if sigAlign file already exist. If not, must provide eventalign to generate sigAlign file.')
+parser.add_argument('--readlist', '-rl', default='', type=str, action='store', help='readId list created along with sigalign file.')
+
 
 # class output
 parser.add_argument('--outpath', '-o', default='./', type=str, action='store', help='path to store the output files.')
@@ -49,7 +51,7 @@ class findNemo:
     class findNemo: predict small molecule modifications from nanopore long-read sequencing data.
     '''
     
-    def __init__(self, region, bam, genome, outpath, prefix, eventalign, sigalign, step):
+    def __init__(self, region, bam, genome, outpath, prefix, eventalign, sigalign, readlist, step):
         
         '''
         self:
@@ -76,24 +78,36 @@ class findNemo:
         self.outpath = outpath
         self.prefix = prefix
         self.step = step
-        
+
         if isinstance(self.chrom, list):
             self.bins = {}
             for i in range(len(self.chrom)):
                 self.bins[self.chrom[i]] = np.arange(self.qStart[i], self.qEnd[i], self.step)
         else:    
             self.bins = np.arange(self.qStart, self.qEnd, self.step)
-
-        # Index reads to avoid storing the long readnames. 
-        self.reads = {r:i for r,i in zip(self.alignment, range(len(self.alignment)))}
-        self.alignment = {self.reads[r]:self.alignment[r] for r in self.reads}
-
+        # print(self.bins)
+        
+        # Index reads to avoid storing the long readnames.
+        if readlist:
+            print('readling read list...')
+            myreadlist = {}
+            with open(readlist, 'r') as rl:
+                for line in rl:
+                    line = line.strip().split('\t')
+                    myreadlist[line[0]] = line[1]
+            
+            self.reads = {r:myreadlist[r] for r in self.alignment}
+        else:
+            self.reads = {r:i for r,i in zip(self.alignment, range(len(self.alignment)))}
+        
+        self.alignment = {int(self.reads[r]):self.alignment[r] for r in self.reads}
+        # print(self.alignment)
+        
         # Store the readname index match into a file.
         readFh = open(outpath + prefix + '_' + region + '_readID.tsv', 'w')
         for k,v in self.reads.items(): readFh.write('{read}\t{index}\n'.format(read = k, index = v))
         readFh.close()
         print(len(self.reads), " reads mapped to ", region)
-
         if sigalign:
             self.sigalign = sigalign
         elif eventalign:
@@ -113,19 +127,17 @@ class findNemo:
             }
 
     def doWork(self, work):
-        (readID, strand, bins, step, aStart, aEnd, sigList, sigLenList, kmerWindow, signalWindow, device, model, weight) = work
+        (readID, strand, bins, step, aStart, aEnd, qStart, sigList, sigLenList, kmerWindow, signalWindow, device, model, weight) = work
         
-        scores = runNNT(readID, strand, bins, step, aStart, aEnd, sigList, sigLenList, kmerWindow, signalWindow, device, model, weight)
+        scores = runNNT(readID, strand, bins, step, aStart, aEnd, qStart, sigList, sigLenList, kmerWindow, signalWindow, device, model, weight)
         
         return scores
     
     def modPredict(self, model, weight, threads, kmerWindow, signalWindow, load):
         
         print('Start predicting modified positions...')
-        torch.multiprocessing.set_start_method('spawn')
-                
         device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-        
+        torch.multiprocessing.set_start_method('spawn')
         # only one model available
         models = {
             'resnet1d': ResNet1D(
@@ -144,36 +156,38 @@ class findNemo:
         print('Device type: ', device)
         
         # Total work to be done are stored in a list
-        works = [(readID, strand, self.bins, self.step, aStart, aEnd, sigList, sigLenList, kmerWindow, signalWindow, device, models[model], weight) 
+        works = [(readID, strand, self.bins, self.step, aStart, aEnd, self.qStart, sigList, sigLenList, kmerWindow, signalWindow, device, models[model], weight) 
                   for readID, aStart, aEnd, strand, sigList, sigLenList in parseSigAlign(self.sigalign, self.alignment)]
-        
         # Use the specified threads number or maximum available CPU cores
         num_processes = min(threads, multiprocessing.cpu_count())
         
         for x in range(0, len(works), load):
-            # split total work by loads
+            # split total work by loads 
             works_per_load = works[x:x+load]
             # open the pool for multiprocessing
             pool = multiprocessing.Pool(processes=num_processes)
             # Use the pool.map() function to process reads in parallel
             outs = pool.map(self.doWork, works_per_load)
-
+            
             # Close the pool to release resources
             pool.close()
             pool.join()
-
+            
             # Write the results from current work load
             predOut = self.outpath + self.prefix + '_'  + str(self.region) + '_' + str(x) + '_prediction.tsv'
             predOutFh = open(predOut, 'w')
             for r in range(len(outs)):
                 out = outs[r]
-                readID = works_per_load[r][0]
-                strand = works_per_load[r][1]
-                bin_start = next(iter(out))
-                predOutFh.write('{readID}\t{strand}\t{bin_start}\t{scores}\n'.format(readID = readID, strand = strand, bin_start = bin_start, scores = ','.join(map(str, out.values()))))
+                if out:
+                    readID = works_per_load[r][0]
+                    strand = works_per_load[r][1]
+                    bin_start = next(iter(out))
+                        
+                    predOutFh.write('{readID}\t{strand}\t{bin_start}\t{scores}\n'.format(readID = readID, strand = strand, bin_start = bin_start, scores = ','.join(map(str, out.values()))))
             predOutFh.close()
             print('Prediction scores were writted in ',predOut, '.')
-    
+
+
     def predToBedGraph(self, prediction, threashold):
         
         bdgOut = self.outpath + self.prefix + '_'  + str(self.region) + '_' + str(threashold) + '_prediction.bedgraph'
@@ -187,17 +201,18 @@ class findNemo:
             myregion = self.gene_regions[pregion]
         else:
             myregion = pregion
-        myplot = plotAllTrack(prediction, gtf, refBdg, predBdg, myregion, self.bins, self.step, self.outpath, self.prefix, threashold)
-        outfig =  self.outpath + self.prefix + '_'  + str(myregion) + '_modTrack.png'
+        print(self.bins)
+        myplot = plotAllTrack(prediction, gtf, refBdg, predBdg, myregion, self.qStart, self.bins, self.step, self.outpath, self.prefix, threashold)
+        outfig =  self.outpath + self.prefix + '_'  + str(myregion) + '_modTrack.pdf'
         print('Saving output to ', outfig)
         myplot.savefig(outfig)
         print('Done plotting genome track.')
 
 if __name__ == '__main__':
-    myprediction = findNemo(args.region, args.bam, args.genome, args.outpath, args.prefix, args.eventalign, args.sigalign, args.step)
-    assert args.mode in ['train', 'predict', 'plot']
+    myprediction = findNemo(args.region, args.bam, args.genome, args.outpath, args.prefix, args.eventalign, args.sigalign, args.readlist, args.step)
+    assert args.mode in ['init', 'train', 'predict', 'plot']
     if args.mode == 'train':
-        print('Done Training!')
+        print('Done Preprocessing!')
     elif args.mode == 'predict':
         if not args.prediction:
             myprediction.modPredict(args.model, args.weight, args.threads, args.kmerWindow, args.signalWindow, args.load)

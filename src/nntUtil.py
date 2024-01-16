@@ -39,15 +39,13 @@ def tune_signal(sigList, min_val=50, max_val=130):
     new_sigList = [max(min_val, min(max_val, float(signal))) for signal in sigList]
     return new_sigList
 
-def runNNT(readID, strand, bins, step, aStart, aEnd, sigList, sigLenList, kmerWindow, signalWindow, device, model, weight):
+def runNNT(readID, strand, bins, step, aStart, aEnd, qStart, sigList, sigLenList, kmerWindow, signalWindow, device, model, weight):
     
-    print('Start processing read', readID)
+    print('Start processing read', readID, flush=True)
     start_time = time.time()
-    
-    L = int(np.floor(aStart/step))
-    R = int(np.floor(aEnd/step))
+    L = max(int(np.floor((aStart-qStart)/step)), 0)
+    R = min(int(np.floor((aEnd-qStart)/step)), len(bins)-1)
     binScores = {}
-    
     for i in range(L, R+1):
         # 1. Fetch sequences with kmer window size, this step is optional
         # seq = refSeq[bin:bin+kmerWindow]
@@ -55,11 +53,9 @@ def runNNT(readID, strand, bins, step, aStart, aEnd, sigList, sigLenList, kmerWi
         # 2. Fetch signals with signal window size
         start = max(bins[i], aStart)
         end = min(start+kmerWindow, aEnd)
-        
-        # print('Predicting at position:', start, '-',end)
-        
+        # print('Predicting ' ,readID ,' at position:', start, '-',end)
         signals = fetchSignal(start-aStart, end-aStart, sigLenList, sigList, signalWindow)
-        
+
         if signals == 'end':
             break
         # signals not enough (less than signalWindow) or not signals aligned to this region (should not happen theoraticaly)
