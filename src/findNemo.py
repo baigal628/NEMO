@@ -27,7 +27,7 @@ parser.add_argument('--prefix', '-p', default='', type=str, action='store', help
 
 # modPredict input
 parser.add_argument('--model', '-m', default='resnet1d', type=str, action='store', help='deep neural network meodel used for prediction.')
-parser.add_argument('--weight', '-w', default='/private/groups/brookslab/gabai/tools/seqUtils/src/nanopore_classification/best_models/addseq_resnet1d.pt', type=str, action='store', help='path to model weight.')
+parser.add_argument('--weight', '-w', default='/private/groups/brookslab/gabai/tools/NEMO/src/nanopore_classification/best_models/addseq_resnet1d.pt', type=str, action='store', help='path to model weight.')
 parser.add_argument('--threads', '-t', default=1, type=int, action='store', help='number of threads.')
 parser.add_argument('--step', '-step', default=40, type=int, action='store', help='step to bin the region.')
 parser.add_argument('--kmerWindow', '-kw', default=75, type=int, action='store', help='kmer window size to extend bin.')

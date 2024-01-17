@@ -151,8 +151,8 @@ def predToMtx(infile, pregion, bins, outpath = '', prefix = '', step = 40, imput
     chrom = pregion.split(':')[0]
     locus = pregion.split(':')[1].split('-')
     pstart, pend = int(locus[0]), int(locus[1])
-    rstart = int(np.floor((pstart-bins[0])/40))
-    rend = int(np.ceil((pend-bins[0])/40))
+    rstart = int(np.floor((pstart-bins[0])/step))
+    rend = int(np.ceil((pend-bins[0])/step))
     
     outfile = outpath + prefix + '_' + pregion + '.mtx'
     readnames = []
@@ -298,7 +298,7 @@ def plotGtfTrack(plot, gtfFile, region, features = ['CDS', 'start_codon'], geneP
                    right=False, labelright=False,
                    top=False, labeltop=False)
 
-def clusterRead(predict, outpath, prefix, region, pregion, bins, n_cluster = '', random_state = 42, method = '', show_elbow = True, nPC= 15):
+def clusterRead(predict, outpath, prefix, region, pregion, bins, step = 40, n_cluster = '', random_state = 42, method = '', show_elbow = True, nPC= 5):
     '''
     
     ClusterRead function takes a modification prediction file as input and do clustering on reads.
@@ -320,9 +320,9 @@ def clusterRead(predict, outpath, prefix, region, pregion, bins, n_cluster = '',
     if method == 'pca':
         print('Reading prediction file and outputing matrix...')
         prefix = prefix + "_method_pca_"
-        readnames, strands, mtx, bins = predToMtx(infile=predict, pregion=pregion, bins=bins, outpath=outpath, prefix=prefix)
+        readnames, strands, mtx, bins = predToMtx(infile=predict, pregion=pregion, bins=bins, outpath=outpath, prefix=prefix, step=step)
         print('running pca...')
-        pca = PCA(n_components=5)
+        pca = PCA(n_components=nPC)
         new_mtx = pca.fit(mtx).transform(mtx)
         
         rel_height = 1.2
@@ -352,12 +352,12 @@ def clusterRead(predict, outpath, prefix, region, pregion, bins, n_cluster = '',
     elif method == 'cor':
         print('Reading prediction file and outputing matrix...')
         prefix = prefix + "_method_cor_"
-        readnames, strands, mtx, bins = predToMtx(infile=predict, pregion=pregion, bins=bins, outpath=outpath, prefix=prefix, impute=False)
+        readnames, strands, mtx, bins = predToMtx(infile=predict, pregion=pregion, bins=bins, outpath=outpath, prefix=prefix, step=step, impute=False)
         res = stats.spearmanr(mtx, axis = 1, nan_policy = 'omit')
         new_mtx = res.statistic
 
     else:
-        readnames, strands, mtx, bins = predToMtx(infile=predict, pregion=pregion, bins=bins, outpath=outpath, prefix=prefix)
+        readnames, strands, mtx, bins = predToMtx(infile=predict, pregion=pregion, bins=bins, outpath=outpath, step=step, prefix=prefix)
         new_mtx = mtx
 
     try:
@@ -403,7 +403,6 @@ def clusterRead(predict, outpath, prefix, region, pregion, bins, n_cluster = '',
         max_iter=300,
         random_state=random_state)
 
-    print(new_mtx[1:3,1:3])
     kmeans.fit(new_mtx)
     for r,s,l in zip(readnames, strands, kmeans.labels_):
         line = '{}\t{}\t{}\n'.format(r, s, l)
@@ -599,7 +598,7 @@ def plotModTrack(ax, labels, readnames, strands, mtx, bins, step = 40,
 #     print('Finished plotting ' , bdg,  '!')
 
 def plotAllTrack(prediction, gtfFile, bins, region, pregion,
-                 outpath = '', prefix = '', ncluster = '', method = 'pca', 
+                 step = 40, outpath = '', prefix = '', ncluster = '', method = 'pca', 
                  subset = False, colorPalette = 'viridis', colorRange = (0.3, 0.5, 0.6), vlines = '',
                  gtfFeatures = ['CDS', 'start_codon'],  genePlot = {'CDS': 'gene_name', 'start_codon': 'gene_name'}, 
                  geneSlot = {'CDS': 3, 'start_codon': 3}, gtfHeight = [0.8, 0.8], adjust_features = '',
@@ -608,7 +607,7 @@ def plotAllTrack(prediction, gtfFile, bins, region, pregion,
 
     print('Start clustering reads...')
     labels, readnames, strands, mtx, bins = clusterRead(predict=prediction, outpath=outpath, prefix=prefix, 
-                                                  region=region, pregion=pregion, bins=bins, 
+                                                  region=region, pregion=pregion, bins=bins, step =step,
                                                   n_cluster=ncluster, method=method, random_state=seed, show_elbow = False)
     print('Finished clustering reads!')
 
@@ -631,7 +630,7 @@ def plotAllTrack(prediction, gtfFile, bins, region, pregion,
                 #(left, bottom, width, height)
     ax1 = plt.axes((0.1, 0.2 , 0.85, 0.6), frameon=False)
     ax2 = plt.axes((0.1, 0.8, 0.85, 0.16), frameon=False)
-    plotModTrack(ax=ax1, labels=labels, readnames=readnames, strands=strands, mtx=mtx, bins=bins, 
+    plotModTrack(ax=ax1, labels=labels, readnames=readnames, strands=strands, mtx=mtx, bins=bins, step=step,
                  ylim_adjust=track_ylim_adjust, agg_adjust=track_agg_adjust,
                  colorRange = colorRange, colorPalette=colorPalette, height=trackHeight, xticks_space=xticks_space)
     
