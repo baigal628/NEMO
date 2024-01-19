@@ -127,7 +127,7 @@ def readGTF(gtfFile, chromPlot, startPlot, endPlot, genePlot, geneSlot, features
     return (features, sorted_gtfReads)
 
 def predToMtx(infile, pregion, bins, outpath = '', prefix = '', step = 40, impute = True, 
-              strategy = 'most_frequent', filter_read = True, write_out = True):
+              strategy = 'most_frequent', filter_read = True, write_out = True, na_thred = 0.5):
 
     '''
     predToMtx function formats input prediction tsv file into an matrix.
@@ -193,7 +193,7 @@ def predToMtx(infile, pregion, bins, outpath = '', prefix = '', step = 40, imput
     strands = np.array(strands, dtype = int)
     
     if filter_read:
-        little_na = np.invert(np.isnan(mtx).sum(axis = 1)>(mtx.shape[1]/2))
+        little_na = np.invert(np.isnan(mtx).sum(axis = 1)>(mtx.shape[1]*na_thred))
         mtx = mtx[little_na,:]
         readnames = readnames[little_na]
         strands = strands[little_na]
@@ -298,7 +298,7 @@ def plotGtfTrack(plot, gtfFile, region, features = ['CDS', 'start_codon'], geneP
                    right=False, labelright=False,
                    top=False, labeltop=False)
 
-def clusterRead(predict, outpath, prefix, region, pregion, bins, step = 40, n_cluster = '', random_state = 42, method = '', show_elbow = True, nPC= 5):
+def clusterRead(predict, outpath, prefix, region, pregion, bins, step = 40, n_cluster = '', random_state = 42, method = '', show_elbow = True, nPC= 5, na_thred = 0.5):
     '''
     
     ClusterRead function takes a modification prediction file as input and do clustering on reads.
@@ -320,7 +320,7 @@ def clusterRead(predict, outpath, prefix, region, pregion, bins, step = 40, n_cl
     if method == 'pca':
         print('Reading prediction file and outputing matrix...')
         prefix = prefix + "_method_pca_"
-        readnames, strands, mtx, bins = predToMtx(infile=predict, pregion=pregion, bins=bins, outpath=outpath, prefix=prefix, step=step)
+        readnames, strands, mtx, bins = predToMtx(infile=predict, pregion=pregion, bins=bins, outpath=outpath, prefix=prefix, step=step, na_thred=na_thred)
         print('running pca...')
         pca = PCA(n_components=nPC)
         new_mtx = pca.fit(mtx).transform(mtx)
@@ -352,12 +352,12 @@ def clusterRead(predict, outpath, prefix, region, pregion, bins, step = 40, n_cl
     elif method == 'cor':
         print('Reading prediction file and outputing matrix...')
         prefix = prefix + "_method_cor_"
-        readnames, strands, mtx, bins = predToMtx(infile=predict, pregion=pregion, bins=bins, outpath=outpath, prefix=prefix, step=step, impute=False)
+        readnames, strands, mtx, bins = predToMtx(infile=predict, pregion=pregion, bins=bins, outpath=outpath, prefix=prefix, step=step, impute=False, na_thred=na_thred)
         res = stats.spearmanr(mtx, axis = 1, nan_policy = 'omit')
         new_mtx = res.statistic
 
     else:
-        readnames, strands, mtx, bins = predToMtx(infile=predict, pregion=pregion, bins=bins, outpath=outpath, step=step, prefix=prefix)
+        readnames, strands, mtx, bins = predToMtx(infile=predict, pregion=pregion, bins=bins, outpath=outpath, step=step, prefix=prefix, na_thred=na_thred)
         new_mtx = mtx
 
     try:
@@ -597,7 +597,7 @@ def plotModTrack(ax, labels, readnames, strands, mtx, bins, step = 40,
 #     plot.set_ylabel(annot)
 #     print('Finished plotting ' , bdg,  '!')
 
-def plotAllTrack(prediction, gtfFile, bins, region, pregion,
+def plotAllTrack(prediction, gtfFile, bins, region, pregion, na_thred = 0.5, 
                  step = 40, outpath = '', prefix = '', ncluster = '', method = 'pca', 
                  subset = False, colorPalette = 'viridis', colorRange = (0.3, 0.5, 0.6), vlines = '',
                  gtfFeatures = ['CDS', 'start_codon'],  genePlot = {'CDS': 'gene_name', 'start_codon': 'gene_name'}, 
@@ -607,7 +607,7 @@ def plotAllTrack(prediction, gtfFile, bins, region, pregion,
 
     print('Start clustering reads...')
     labels, readnames, strands, mtx, bins = clusterRead(predict=prediction, outpath=outpath, prefix=prefix, 
-                                                  region=region, pregion=pregion, bins=bins, step =step,
+                                                  region=region, pregion=pregion, bins=bins, step =step, na_thred=na_thred,
                                                   n_cluster=ncluster, method=method, random_state=seed, show_elbow = False)
     print('Finished clustering reads!')
 
