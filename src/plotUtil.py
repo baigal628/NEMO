@@ -598,7 +598,7 @@ def plotModTrack(ax, labels, readnames, strands, mtx, bins, step = 40,
 #     print('Finished plotting ' , bdg,  '!')
 
 def plotAllTrack(prediction, gtfFile, bins, region, pregion, na_thred = 0.5, 
-                 step = 40, outpath = '', prefix = '', ncluster = '', method = 'pca', 
+                 step = 40, outpath = '', prefix = '', ncluster = 3, method = '', 
                  subset = False, colorPalette = 'viridis', colorRange = (0.3, 0.5, 0.6), vlines = '',
                  gtfFeatures = ['CDS', 'start_codon'],  genePlot = {'CDS': 'gene_name', 'start_codon': 'gene_name'}, 
                  geneSlot = {'CDS': 3, 'start_codon': 3}, gtfHeight = [0.8, 0.8], adjust_features = '',

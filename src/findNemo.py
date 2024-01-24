@@ -3,7 +3,7 @@ from nanoUtil import parseEventAlign, parseSigAlign
 from nntUtil import runNNT
 from resnet1d import ResNet1D
 from plotUtil import plotAllTrack
-from trackUtil import predictionToBedGraph
+from trackUtil import predToBedGraph
 import argparse
 import torch
 import numpy as np
@@ -33,10 +33,11 @@ parser.add_argument('--step', '-step', default=40, type=int, action='store', hel
 parser.add_argument('--kmerWindow', '-kw', default=75, type=int, action='store', help='kmer window size to extend bin.')
 parser.add_argument('--signalWindow', '-sw', default=400, type=int, action='store', help='signal Window size to feed into the model.')
 parser.add_argument('--load', '-l', default=50, type=int, action='store', help='number of reads to load into each iterations. Each iteration will output a file.')
-parser.add_argument('--threshold', '-threshold', default=0.6, type=float, action='store', help='prediction value above this threshold willl be called as modified (1).')
+parser.add_argument('--threshold', '-threshold', default=(0.3, 0.55, 0.6), action='store', help='prediction value above this threshold willl be called as modified (1).')
 #
 #  plot input
 parser.add_argument('--prediction', '-pred', default = '', type=str, action='store', help='path to prediction file from modification prediction results.')
+parser.add_argument('--ncluster', '-nc', default = '', type=int, action='store', help='number of kmean clusters.')
 parser.add_argument('--gtf', '-gtf', default = '', type=str, action='store', help='path to General Transfer Format (GTF) file.')
 parser.add_argument('--refbdg', '-rbdg', default = '', type=str, action='store', help='path to ground truth ot short read bedgraph.')
 parser.add_argument('--predbdg', '-pbdg', default = '', type=str, action='store', help='path to aggregated prediction bedgraph from predToBedGraph call.')
@@ -99,14 +100,14 @@ class findNemo:
             self.reads = {r:myreadlist[r] for r in self.alignment}
         else:
             self.reads = {r:i for r,i in zip(self.alignment, range(len(self.alignment)))}
+            readFh = open(outpath + prefix + '_' + region + '_readID.tsv', 'w')
+            for k,v in self.reads.items(): readFh.write('{read}\t{index}\n'.format(read = k, index = v))
+            readFh.close()
         
         self.alignment = {int(self.reads[r]):self.alignment[r] for r in self.reads}
         # print(self.alignment)
-        
         # Store the readname index match into a file.
-        readFh = open(outpath + prefix + '_' + region + '_readID.tsv', 'w')
-        for k,v in self.reads.items(): readFh.write('{read}\t{index}\n'.format(read = k, index = v))
-        readFh.close()
+
         print(len(self.reads), " reads mapped to ", region)
         if sigalign:
             self.sigalign = sigalign
@@ -118,7 +119,7 @@ class findNemo:
         
         self.gene_regions = {
             'PHO5': 'chrII:429000-435000',
-            'CLN2': 'chrXVI:66000-67550',
+            'CLN2': 'chrXVI:66400-67550',
             'HMR': 'chrIII:290000-299000',
             'AUA1': 'chrVI:114000-116000',
             'EMW1': 'chrXIV:45000-50000',
@@ -188,24 +189,19 @@ class findNemo:
             print('Prediction scores were writted in ',predOut, '.')
 
 
-    def predToBedGraph(self, prediction, threashold):
-        
-        bdgOut = self.outpath + self.prefix + '_'  + str(self.region) + '_' + str(threashold) + '_prediction.bedgraph'
-        
-        print('Writing summarized prediction output to ', bdgOut, '...')
-        predictionToBedGraph(prediction, self.bins, self.step, threashold, self.chrom, self.qStart, self.qEnd, self.prefix, outfile=bdgOut)
+    def exportBedgraph(self, prediction, threshold):
+                
+        predToBedGraph(prediction, self.chrom, self.bins, self.step, threshold[1], self.outpath, self.prefix)
         print('Done exporitng bedgraph.')
     
-    def plotTrack(self, prediction, gtf, refBdg, predBdg, pregion, threashold):
+    def plotTrack(self, prediction, gtf, pregion, threshold, ncluster):
         if pregion in self.gene_regions:
             myregion = self.gene_regions[pregion]
         else:
             myregion = pregion
-        print(self.bins)
-        myplot = plotAllTrack(prediction, gtf, refBdg, predBdg, myregion, self.qStart, self.bins, self.step, self.outpath, self.prefix, threashold)
-        outfig =  self.outpath + self.prefix + '_'  + str(myregion) + '_modTrack.pdf'
-        print('Saving output to ', outfig)
-        myplot.savefig(outfig)
+        plotAllTrack(prediction=prediction, gtfFile=gtf, bins = self.bins, step = self.step, 
+                              outpath=self.outpath, prefix=self.prefix, region=self.region, 
+                              pregion = myregion, colorRange =threshold, ncluster=ncluster)
         print('Done plotting genome track.')
 
 if __name__ == '__main__':
@@ -216,9 +212,8 @@ if __name__ == '__main__':
     elif args.mode == 'predict':
         if not args.prediction:
             myprediction.modPredict(args.model, args.weight, args.threads, args.kmerWindow, args.signalWindow, args.load)
-        else:
-            print('Writing prediction to bedgraph...')
-            myprediction.predToBedGraph(args.prediction, args.threshold)
-
+    elif args.mode == 'callbdg':
+        print('Writing prediction to bedgraph...')
+        myprediction.exportBedgraph(args.prediction, args.threshold)
     elif args.mode == 'plot':
-        myprediction.plotTrack(args.prediction, args.gtf, args.refbdg, args.predbdg, args.pregion, args.threshold)
+        myprediction.plotTrack(args.prediction, args.gtf, args.pregion, args.threshold, args.ncluster)
