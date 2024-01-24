@@ -59,26 +59,30 @@ optional arguments:
 ## 1. Preidct modified regions using pre-trained model
 
 ```{bash}
-python3 ./findNemo.py
+python3 ./findNemo.py \
     --mode predict \
-    --region chrII \
-    --bam ./Add-seq/data/chrom/mapping/chrom.sorted.bam \
-    --genome ./Add-seq/data/ref/sacCer3.fa \
-    --eventalign ./addseq_data/eventalign/chrII.eventalign.txt \
-    --outpath ./addseq_data/231110_test_nemo_v0_chrII/ \
-    --prefix 231110_addseq_chrII \
-    --threads 8
+    --region chrXVI:66000-67600 \
+    --bam ./data/mapping/chrom_pass.sorted.bam \
+    --genome ./data/ref/sacCer3.fa \
+    --sigalign ./data/eventalign/chrom_pass_evenalign.tsv \
+    --outpath ./ \
+    --prefix cln2_prm \
+    --readlist ./chrom_pass.sorted_all_readID.tsv \
+    --threads 16 \
+    --step 20
 
 # With pre computed sigalign file:
-python3 ./findNemo.py
+python3 ./findNemo.py \
     --mode predict \
-    --region chrII \
-    --bam ./Add-seq/data/chrom/mapping/chrom.sorted.bam \
-    --genome ./Add-seq/data/ref/sacCer3.fa \
-    --sigalign ./addseq_data/231110_test_nemo_v0_chrII/231110_test_chrIIchrII_sig.tsv \
-    --outpath ./addseq_data/231110_test_nemo_v0_chrII/ \
-    --prefix 231110_addseq_chrII \
-    --threads 8
+    --region chrXVI:66000-67600 \
+    --bam ./data/mapping/chrom_pass.sorted.bam \
+    --genome ./data/ref/sacCer3.fa \
+    --sigalign ./data/sigalign/chrXVI_sig.tsv \
+    --outpath ./ \
+    --prefix cln2_prm \
+    --readlist ./chrom_pass.sorted_all_readID.tsv \
+    --threads 16 \
+    --step 20
 ```
 
 ## 2. Aggregate prediction scores and export a bedgraph file
@@ -97,21 +101,23 @@ python3 ./findNemo.py
 
 ## 3. plot modified regions using prediction file
 ```{bash}
-python3 ./findNemo.py
+python3 ./findNemo.py \
     --mode plot \
-    --region chrII \
-    --bam ./Add-seq/data/chrom/mapping/chrom.sorted.bam \
-    --genome ./Add-seq/data/ref/sacCer3.fa \
-    --outpath ./addseq_data/231110_test_nemo_v0_chrII/ \
-    --prefix 231110_addseq_chrII \
-    --prediction  ./231110_addseq_chrII_0_prediction.tsv \
-    --pregion chrII:13244-23635 \
-    --gtf ./data/ref/Saccharomyces_cerevisiae.R64-1-1.109.gtf \
-    --refbdg ./data/ref/sacCer3.bedgraph
-    --predbdg ./231110_addseq_chrII_0.65_prediction.bedgraph
-    --threshold 0.65
+    --region chrXVI:66000-67600 \
+    --pregion CLN2 \
+    --prediction CLN2_prediction.tsv \
+    --bam ./chrom_pass.sorted.bam \
+    --genome ./data/ref/sacCer3.fa \
+    --sigalign ./chrXVI_sig.tsv \
+    --outpath ./results/figures/ \
+    --prefix cln2_prm \
+    --readlist ./chrom_pass.sorted_all_readID.tsv \
+    --threads 4 \
+    --step 20 \
+    --ncluster 3 \
+    --gtf ./data/ref/Saccharomyces_cerevisiae.R64-1-1.109.gtf
 ```
 <p align="middle">
-<img src="./img/231115_top1500_read_chrII:13244-23635_modTrack.png"/>
+<img src="./img/240123_resnetv1_CLN2_step20_chrXVI:66000-67600__clustered_reads.pdf"/>
 </p>
 
