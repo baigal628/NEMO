@@ -37,7 +37,7 @@ parser.add_argument('--threshold', '-threshold', default=(0.3, 0.55, 0.6), actio
 #
 #  plot input
 parser.add_argument('--prediction', '-pred', default = '', type=str, action='store', help='path to prediction file from modification prediction results.')
-parser.add_argument('--ncluster', '-nc', default = '', type=int, action='store', help='number of kmean clusters.')
+parser.add_argument('--ncluster', '-nc', default = 3, type=int, action='store', help='number of kmean clusters.')
 parser.add_argument('--gtf', '-gtf', default = '', type=str, action='store', help='path to General Transfer Format (GTF) file.')
 parser.add_argument('--refbdg', '-rbdg', default = '', type=str, action='store', help='path to ground truth ot short read bedgraph.')
 parser.add_argument('--predbdg', '-pbdg', default = '', type=str, action='store', help='path to aggregated prediction bedgraph from predToBedGraph call.')
