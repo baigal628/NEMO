@@ -560,8 +560,7 @@ def plotModTrack(ax, labels, readnames, strands, mtx, bins, step = 40,
         ax.add_patch(rectangle)
         left += step
     bottom +=(np.max(aggregate)*extend+1)
-    ax.set_xlim(bins[0], bins[1])
-    # ax.set_ylim(-1.5,len(readnames)*height+extend*np.max(aggregate)*len(label_clusters)+ylim_adjust)
+    ax.set_xlim(bins[0], bins[-1])
     ax.set_ylim(-1.5, bottom)
 
     ax.tick_params(
