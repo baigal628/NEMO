@@ -1,56 +1,83 @@
-"""
-Entrypoint for training nanopore classification models
-"""
-
 import argparse
 import pandas as pd
 from sklearn.metrics import confusion_matrix
 from tqdm import tqdm
+import wandb
+
+# pytorch
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchsummary import summary
-from resnet1d import ResNet1D
-from nanopore_convnet import NanoporeConvNet
+
+# data set formatting
 from nanopore_dataset import create_sample_map
 from nanopore_dataset import create_splits
 from nanopore_dataset import load_sigalign
+from nanopore_dataset import load_parquet
 from nanopore_dataset import NanoporeDataset
-from nanopore_transformer import NanoporeTransformer
 
-# Read commandline arguments
+# models
+from resnet1d import ResNet1D
+from nanopore_convnet import NanoporeConvNet
+from nanopore_transformer import NanoporeTransformer
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--exp_id', default='test')
-parser.add_argument('--device', default='cuda:0')
-# if you do not have a train validation split
-parser.add_argument('--neg_data', default='')
-parser.add_argument('--pos_data', default='')
-parser.add_argument('--neg_train', default='')
-parser.add_argument('--pos_train', default='')
-parser.add_argument('--neg_val', default='')
-parser.add_argument('--pos_val', default='')
-parser.add_argument('--neg_seq', default='')
-parser.add_argument('--pos_seq', default='')
-parser.add_argument('--seq_len', type=int, default=400)
+parser.add_argument('--device', default='auto')
+
+# if you do not have a train validation split, specify the above
+parser.add_argument('--neg_data', type= str, default='', help='unmodified dechromatanized dna sequences, either a siglaign file or a parquet file format.')
+parser.add_argument('--pos_data', type= str, default='', help='fully modified dechromatinized dna sequences, either a siglaign file or a parquet file format.')
+parser.add_argument('--input_dtype', type= str, default='parquet', help='choose between sigalign or parquet. DEFAULT: parquet.')
+parser.add_argument('--train_split', type=float, default=0.6, help='fraction of data used for training model. DEFAULT: 0.6.')
+parser.add_argument('--val_split', type=float, default=0.2, help='fraction of data used for model validation. DEFAULT: 0.2.')
+parser.add_argument('--test_split', type=float, default=0.2, help='fraction of data used for testing model. DEFAULT: 0.2.')
+
+#input and output data preprocessing parameters
 parser.add_argument('--min_val', type=float, default=50) # Used to clip outliers
 parser.add_argument('--max_val', type=float, default=130) # Used to clip outliers
-parser.add_argument('--train_split', type=float, default=0.8)
-parser.add_argument('--val_split', type=float, default=0.2)
+parser.add_argument('--seq_len', type=int, default=400)
+parser.add_argument('--max_seqs', type=int, default=None)
+parser.add_argument('--outpath', type=str, default='./')
+
+# model paramters
+parser.add_argument('--model_type', default='resnet')
+
+# training hyperparameters
 parser.add_argument('--batch_size', type=int, default=128)
 parser.add_argument('--epochs', type=int, default=100)
 parser.add_argument('--steps_per_epoch', type=int, default=1000)
 parser.add_argument('--val_steps_per_epoch', type=int, default=1000)
-parser.add_argument('--model_type', default='resnet')
 parser.add_argument('--opt', default='adam')
 parser.add_argument('--decay', type=float, default=0.0)
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--momentum', type=float, default=0.9)
 parser.add_argument('--patience', type=int, default=10)
-parser.add_argument('--max_seqs', type=int, default=None)
-parser.add_argument('--outpath', type=str, default='')
+
 args = parser.parse_args()
+
+# start a new wandb run to track this script
+wandb.init(
+    # set the wandb project where this run will be logged
+    project=args.exp_id,
+
+    # track hyperparameters and run metadata
+    config={
+    "architecture": args.model_type,
+    "learning_rate": args.lr,
+    "dataset": args.exp_id,
+    "epochs": args.epochs,
+    "batch_size:": args.batch_size,
+    "opti:": args.opt,
+    "momentum:": args.momentum,
+    "decay:": args.decay
+
+    }
+)
+
+
 
 ##############
 # set device #
@@ -61,69 +88,70 @@ else:
     device = args.device
 print('Device type:', device)
 
+
 ###############
 # set outfile #
 ###############
 # best model based on validation accuracy
-best_model_fn = f'{args.outpath}/best_models/{args.exp_id}_{args.model_type}.pt'
+best_model_fn = f'{args.outpath}/{args.exp_id}_{args.model_type}_best_model.pt'
 # stats associated with best model
-best_model_accuracy_fn = f'{args.outpath}/results/{args.exp_id}_{args.model_type}_best_model.csv'
+best_model_accuracy_fn = f'{args.outpath}/{args.exp_id}_{args.model_type}_best_model.csv'
 # stats associated with best model
-metrics_fn = f'{args.outpath}/results/{args.exp_id}_{args.model_type}.csv'
+metrics_fn = f'{args.outpath}/{args.exp_id}_{args.model_type}.csv'
 
-# unmodified input data
-if args.neg_data:
-    # Prepare data for training
-    print("Preparing unmodified...")
-    print("Loading csv...")
-    unmodified_sequences = load_sigalign(args.neg_data,
-                                        min_val=args.min_val,
-                                        max_val=args.max_val,
-                                        max_sequences=args.max_seqs)
-    print("Creating sample map...")
-    unmodified_sample_map = create_sample_map(unmodified_sequences,
-                                            seq_len=args.seq_len)
 
-    print("Creating splits...")
-    unmodified_train, unmodified_val, unmodified_test = create_splits(
-            unmodified_sequences, unmodified_sample_map, seq_len=args.seq_len, shuffle=True)
-    print("Prepared.")
-    del unmodified_sample_map
+#################################
+# train, validation, test split #
+#################################
+if args.input_dtype == 'sigalign':
+    load_data = load_sigalign
+elif args.input_dtype == 'parquet':
+    load_data = load_parquet
 
-elif args.neg_train:
-    print("Reading unmodified...")
-    unmodified_sequences = torch.load(args.neg_seq)
-    unmodified_train = torch.load(args.neg_train)
-    unmodified_val = torch.load(args.neg_val)
-else:
-    print('No unmodified data provided!')
-
-# modified input data
-if args.pos_data:
-    print("Preparing modified...")
-    print("Loading csv...")
-    modified_sequences = load_sigalign(args.pos_data,
+print("Preparing unmodified...")
+print("Loading csv...")
+unmodified_sequences = load_data(args.neg_data,
                                     min_val=args.min_val,
                                     max_val=args.max_val,
                                     max_sequences=args.max_seqs)
-    print("Creating sample map...")
-    modified_sample_map = create_sample_map(modified_sequences,
-                                            seq_len=args.seq_len)
-    print("Creating splits...")
-    modified_train, modified_val, modified_test = create_splits(
-            modified_sequences, modified_sample_map, seq_len=args.seq_len, shuffle=True)
-    print("Prepared.")
+print("Creating sample map...")
+unmodified_sample_map = create_sample_map(unmodified_sequences,
+                                        seq_len=args.seq_len)
 
-    del modified_sample_map
+print("Creating splits...")
+unmodified_train, unmodified_val, unmodified_test = create_splits(unmodified_sequences,
+                                                                unmodified_sample_map,
+                                                                train_split=args.train_split,
+                                                                val_split=args.val_split,
+                                                                test_split=args.test_split,
+                                                                shuffle=True,
+                                                                seq_len=args.seq_len)
+print("Prepared.")
 
-elif args.pos_train:
-    print("Reading modified...")
-    modified_sequences = torch.load(args.pos_seq)
-    modified_train = torch.load(args.pos_train)
-    modified_val = torch.load(args.pos_val)
-else:
-    print('No modified data provided!')
+print("Preparing modified...")
+print("Loading csv...")
+modified_sequences = load_data(args.pos_data,
+                                min_val=args.min_val,
+                                max_val=args.max_val,
+                                max_sequences=args.max_seqs)
+print("Creating sample map...")
+modified_sample_map = create_sample_map(modified_sequences,
+                                        seq_len=args.seq_len)
+print("Creating splits...")
+modified_train, modified_val, modified_test = create_splits(modified_sequences,
+                                                            modified_sample_map,
+                                                            train_split=args.train_split,
+                                                            val_split=args.val_split,
+                                                            test_split=args.test_split,
+                                                            shuffle=True,
+                                                            seq_len=args.seq_len)
+print("Prepared.")
 
+###############################
+# create torch data set class #
+###############################
+
+print('Creating torch dataset class...')
 train_dataset = NanoporeDataset(unmodified_sequences,
                                 unmodified_train,
                                 modified_sequences,
@@ -131,7 +159,6 @@ train_dataset = NanoporeDataset(unmodified_sequences,
                                 device=device,
                                 synthetic=False,
                                 seq_len=args.seq_len)
-del unmodified_train, modified_train
 
 val_dataset = NanoporeDataset(unmodified_sequences,
                               unmodified_val,
@@ -140,17 +167,14 @@ val_dataset = NanoporeDataset(unmodified_sequences,
                               device=device,
                               synthetic=False,
                               seq_len=args.seq_len)
-del unmodified_val, modified_val
 
-# test_dataset = NanoporeDataset(unmodified_sequences,
-#                                unmodified_test,
-#                                modified_sequences,
-#                                modified_test,
-#                                device=device,
-#                                synthetic=False,
-#                                seq_len=args.seq_len)
-# del unmodified_test, modified_test
-del unmodified_sequences, modified_sequences
+test_dataset = NanoporeDataset(unmodified_sequences,
+                               unmodified_test,
+                               modified_sequences,
+                               modified_test,
+                               device=device,
+                               synthetic=False,
+                               seq_len=args.seq_len)
 
 train_dataloader = DataLoader(train_dataset,
                               batch_size=args.batch_size,
@@ -160,12 +184,16 @@ val_dataloader = DataLoader(val_dataset,
                             shuffle=True)
 # test_dataloader = DataLoader(test_dataset,
 #                              batch_size=args.batch_size,
-#                              shuffle=False)
+#                              shuffle=True)
 
+torch.save(test_dataset, f'{args.outpath}/test_dataset_{args.exp_id}_{args.model_type}.pt')
+del test_dataset
 
-# Create model
-
+################
+# set up model #
+################
 assert args.model_type in ['convnet', 'resnet', 'transformer', 'phys']
+
 if args.model_type == 'convnet':
     model = NanoporeConvNet(input_size=args.seq_len).to(device)
     summary(model, (1, 400))
@@ -201,8 +229,7 @@ elif args.model_type == 'phys':
                 use_do=False).to(device)
     summary(model, (1, 400))
 
-print("Created model and moved to device")
-
+print("Created model and moved to the device.")
 
 # Create loss function and optimizer
 
@@ -223,7 +250,12 @@ scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,
                                                  patience=args.patience)
 
 
-# Train model
+##################
+# training model #
+##################
+
+print('Start training...')
+
 best_val_acc = -1
 train_losses = []
 train_accs = []
@@ -329,9 +361,15 @@ for epoch in range(args.epochs):
         train_accs.append(train_acc)
         val_losses.append(val_loss)
         val_accs.append(val_acc)
-        metrics_df = pd.DataFrame({
-            'train_loss': train_losses,
-            'val_loss': val_losses,
-            'train_acc': train_accs,
-            'val_acc': val_accs})
-        metrics_df.to_csv(metrics_fn)
+        wandb.log({
+            'train_loss': train_loss,
+            'val_loss': val_loss,
+            'train_acc': train_acc,
+            'val_acc': val_acc})
+        
+metrics_df = pd.DataFrame({
+    'train_loss': train_losses,
+    'val_loss': val_losses,
+    'train_acc': train_accs,
+    'val_acc': val_accs})
+metrics_df.to_csv(metrics_fn)

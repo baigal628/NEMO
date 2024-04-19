@@ -1,18 +1,18 @@
 """
 Data-loading utils and dataset class for nanopore data
 """
-
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
 from nntUtil import tune_signal
+import pyarrow.parquet as pq
 
 # Load all data into sequences
-def load_csv(filename,
-             min_val=50,
-             max_val=130,
-             max_sequences=None):
+def load_csv(filename, min_val=50, max_val=130, max_sequences=None):
+    '''
+    load csv signal file, with 'START' as idicator of new read.
+    '''
     sequences = []
     sequence = []
     with open(filename, 'r') as f:
@@ -31,10 +31,10 @@ def load_csv(filename,
                         break
     return sequences
 
-def load_sigalign(filename,
-             min_val=50,
-             max_val=130,
-             max_sequences=None):
+def load_sigalign(filename, min_val=50, max_val=130, max_sequences=None):
+    '''
+    read siglaign file and reformat into a seq of signals.
+    '''
     sequences = []
     with open(filename, 'r') as sigFile:
         for line in tqdm(sigFile):
@@ -46,6 +46,24 @@ def load_sigalign(filename,
                     break
     return sequences
 
+def load_parquet(filename, min_val=50, max_val=130, max_sequences=None):
+    '''
+    read pyarrow parquet file and reformat into a seq of signals.
+    '''
+    sequences = []
+    parquet_file = pq.ParquetFile(filename)
+    for z in range(parquet_file.num_row_groups):
+        batch = parquet_file.read_row_group(z)
+        print(z, 'group')
+        for i in range(batch.num_rows):
+            signals = batch['signals'][i].as_py()
+            # siglenperkmer = batch['siglenperkmer'][i].as_py()
+            signals = tune_signal(signals, min_val=min_val, max_val=max_val)
+            sequences.append(signals)
+            if max_sequences is not None:
+                if len(sequences) == max_sequences:
+                    break
+    return sequences
 
 # Compute map for generating samples on-the-fly
 def create_sample_map(sequences, seq_len=400):
@@ -59,10 +77,10 @@ def create_sample_map(sequences, seq_len=400):
 # Create splits
 def create_splits(sequences,
                   sample_map,
-                  train_split=0.8,
+                  train_split=0.6,
                   val_split=0.2,
-                  test_split=0.0,
-                  shuffle=False,
+                  test_split=0.2,
+                  shuffle=True,
                   seq_len=400):
 
     # Compute n_samples per split

@@ -4,37 +4,37 @@ from nntUtil import runNNT
 from resnet1d import ResNet1D
 from plotUtil import plotAllTrack
 from trackUtil import predToBedGraph
+import numpy as np
 import argparse
 import torch
-import numpy as np
 import multiprocessing
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--mode', '-mode', type=str, action='store', help='three modes available: [train, predict, plot]')
+
 # class input
-parser.add_argument('--region', '-r', type=str, action='store', help='genomic coordinates to perform modification predictions. E.g. chrI:2000-5000 or chrI.')
-parser.add_argument('--bam', '-b', type=str, action='store', help='sorted, indexed, and binarized alignment file.')
-parser.add_argument('--genome', '-g', type=str, action='store', help='reference genome fasta file')
+parser.add_argument('--region', '-r', default = 'all', type=str, action='store', help='genomic coordinates to perform modification predictions. E.g. chrI:2000-5000 or chrI or all (for whole genome).')
+parser.add_argument('--bam', '-b', default = '', type=str, action='store', help='path to sorted, indexed, and binarized alignment file.')
+parser.add_argument('--genome', '-g', default = '', type=str, action='store', help='reference genome fasta file')
 parser.add_argument('--eventalign', '-e', default='', type=str, action='store', help='nanopolish eventalign file.')
 parser.add_argument('--sigalign', '-s', default='', type=str, action='store', help='sigalign file if sigAlign file already exist. If not, must provide eventalign to generate sigAlign file.')
 parser.add_argument('--readlist', '-rl', default='', type=str, action='store', help='readId list created along with sigalign file.')
 
-
 # class output
 parser.add_argument('--outpath', '-o', default='./', type=str, action='store', help='path to store the output files.')
-parser.add_argument('--prefix', '-p', default='', type=str, action='store', help='prefix of output file names.')
+parser.add_argument('--prefix', '-p', default='nemo', type=str, action='store', help='prefix of output file names.')
 
 # modPredict input
-parser.add_argument('--model', '-m', default='resnet1d', type=str, action='store', help='deep neural network meodel used for prediction.')
-parser.add_argument('--weight', '-w', default='/private/groups/brookslab/gabai/tools/NEMO/src/nanopore_classification/best_models/addseq_resnet1d.pt', type=str, action='store', help='path to model weight.')
-parser.add_argument('--threads', '-t', default=1, type=int, action='store', help='number of threads.')
-parser.add_argument('--step', '-step', default=40, type=int, action='store', help='step to bin the region.')
+parser.add_argument('--model', '-m', default='resnet1d', type=str, action='store', help='deep neural network meodel used for prediction. DEFAULT: resnet1d.')
+parser.add_argument('--weight', '-w', default='', type=str, action='store', help='path to the trained model.')
+parser.add_argument('--threads', '-t', default=4, type=int, action='store', help='number of threads.')
+parser.add_argument('--step', '-step', default=20, type=int, action='store', help='step to bin the region.')
 parser.add_argument('--kmerWindow', '-kw', default=75, type=int, action='store', help='kmer window size to extend bin.')
 parser.add_argument('--signalWindow', '-sw', default=400, type=int, action='store', help='signal Window size to feed into the model.')
 parser.add_argument('--load', '-l', default=50, type=int, action='store', help='number of reads to load into each iterations. Each iteration will output a file.')
 parser.add_argument('--threshold', '-threshold', default=(0.3, 0.55, 0.6), action='store', help='prediction value above this threshold willl be called as modified (1).')
-#
+
 #  plot input
 parser.add_argument('--prediction', '-pred', default = '', type=str, action='store', help='path to prediction file from modification prediction results.')
 parser.add_argument('--ncluster', '-nc', default = 3, type=int, action='store', help='number of kmean clusters.')
@@ -42,7 +42,6 @@ parser.add_argument('--gtf', '-gtf', default = '', type=str, action='store', hel
 parser.add_argument('--refbdg', '-rbdg', default = '', type=str, action='store', help='path to ground truth ot short read bedgraph.')
 parser.add_argument('--predbdg', '-pbdg', default = '', type=str, action='store', help='path to aggregated prediction bedgraph from predToBedGraph call.')
 parser.add_argument('--pregion', '-pregion', default = '', type=str, action='store', help='region to plot. Can be gene name of the pre defined gene regions.')
-
 
 args = parser.parse_args()
 
@@ -86,7 +85,6 @@ class findNemo:
                 self.bins[self.chrom[i]] = np.arange(self.qStart[i], self.qEnd[i], self.step)
         else:    
             self.bins = np.arange(self.qStart, self.qEnd, self.step)
-        # print(self.bins)
         
         # Index reads to avoid storing the long readnames.
         if readlist:
@@ -199,21 +197,32 @@ class findNemo:
             myregion = self.gene_regions[pregion]
         else:
             myregion = pregion
+        
+        print('plotting region:', myregion)
+        
         plotAllTrack(prediction=prediction, gtfFile=gtf, bins = self.bins, step = self.step, 
-                              outpath=self.outpath, prefix=self.prefix, region=self.region, 
-                              pregion = myregion, colorRange =threshold, ncluster=ncluster)
+                              outpath=self.outpath, prefix=self.prefix, pregion = myregion, 
+                              colorRange =threshold, ncluster=ncluster)
+        
         print('Done plotting genome track.')
 
 if __name__ == '__main__':
     myprediction = findNemo(args.region, args.bam, args.genome, args.outpath, args.prefix, args.eventalign, args.sigalign, args.readlist, args.step)
+    
     assert args.mode in ['init', 'train', 'predict', 'plot']
+    
     if args.mode == 'train':
         print('Done Preprocessing!')
+    
+    # predict modification sites from aligned signals
     elif args.mode == 'predict':
         if not args.prediction:
             myprediction.modPredict(args.model, args.weight, args.threads, args.kmerWindow, args.signalWindow, args.load)
+    
+    # make bedgraph from prediction
     elif args.mode == 'callbdg':
         print('Writing prediction to bedgraph...')
         myprediction.exportBedgraph(args.prediction, args.threshold)
+    
     elif args.mode == 'plot':
         myprediction.plotTrack(args.prediction, args.gtf, args.pregion, args.threshold, args.ncluster)

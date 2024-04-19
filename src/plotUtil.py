@@ -310,7 +310,7 @@ def plotGtfTrack(plot, gtfFile, region, features = ['CDS', 'start_codon'], geneP
                    right=False, labelright=False,
                    top=False, labeltop=False)
 
-def clusterRead(predict, outpath, prefix, region, pregion, bins, step = 40, n_cluster = '', random_state = 42, method = '', show_elbow = True, nPC= 5, na_thred = 0.5, mystrand = ''):
+def clusterRead(predict, outpath, prefix, pregion, bins, step = 40, n_cluster = '', random_state = 42, method = '', show_elbow = True, nPC= 5, na_thred = 0.5, mystrand = ''):
     '''
     
     ClusterRead function takes a modification prediction file as input and perform kmeans clustering on reads.
@@ -362,7 +362,7 @@ def clusterRead(predict, outpath, prefix, region, pregion, bins, step = 40, n_cl
         ax4.set_xlabel('PC3')
         ax4.set_ylabel('PC4')
         plt.subplots_adjust(wspace=0.35, hspace=0.35)
-        plt.savefig(outpath + prefix + region + "_pca.pdf")
+        plt.savefig(outpath + prefix + pregion + "_pca.pdf")
         plt.close()
         
     elif method == 'cor':
@@ -575,49 +575,50 @@ def plotModTrack(ax, labels, readnames, strands, mtx, bins, step = 40,
     ax.set_xticks(ticks= np.arange(bins[0], bins[-1], xticks_space))
     ax.set_xticklabels(ax.get_xticks(), rotation = 50)
 
-# def plotbdgTrack(plot, bdg, region, step = 1, scale = 1000, header = False, col = 'grey', annot = '', ylim = ''):
+def plotbdgTrack(plot, bdg, region, step = 1, scale = 1000, header = False, col = 'grey', annot = '', ylim = ''):
     
-#     chrom = region.split(':')[0]
-#     locus = region.split(':')[1].split('-')
-#     pstart, pend = int(locus[0]), int(locus[1])
-#     ymax = 0
+    chrom = region.split(':')[0]
+    locus = region.split(':')[1].split('-')
+    pstart, pend = int(locus[0]), int(locus[1])
+    ymax = 0
     
-#     print('plotting ' , bdg,  '...')
-#     with open(bdg, 'r') as bdgFh:
-#         if header:
-#             header = bdgFh.readlines(1)
-#         for line in bdgFh:
-#             line = line.strip().split('\t')
-#             if line[0] != chrom:
-#                 continue
-#             start = int(line[1])
-#             end =  int(line[2])
-#             if end < pstart:
-#                 continue
-#             elif start > pend:
-#                 break
-#             else:
-#                 prob = float(line[3])
-#                 height = min(1.0, prob/scale)
-#                 if height > ymax:
-#                     ymax = height
-#                 left = max(start, pstart)
-#                 rectangle = mplpatches.Rectangle([left, 0], end-left, height,
-#                         facecolor = col,
-#                         edgecolor = 'grey',
-#                         linewidth = 0)
-#                 plot.add_patch(rectangle)
+    print('plotting ' , bdg,  '...')
+    with open(bdg, 'r') as bdgFh:
+        if header:
+            header = bdgFh.readlines(1)
+        for line in bdgFh:
+            line = line.strip().split('\t')
+            if line[0] != chrom:
+                continue
+            start = int(line[1])
+            end =  int(line[2])
+            if end < pstart:
+                continue
+            elif start > pend:
+                break
+            else:
+                prob = float(line[3])
+                height = min(1.0, prob/scale)
+                if height > ymax:
+                    ymax = height
+                left = max(start, pstart)
+                rectangle = mplpatches.Rectangle([left, 0], end-left, height,
+                        facecolor = col,
+                        edgecolor = 'grey',
+                        linewidth = 0)
+                plot.add_patch(rectangle)
     
-#     plot.set_xlim(pstart, pend)
-#     if ylim:
-#         plot.set_ylim(0,ylim+0.1)
-#     plot.set_ylim(0,ymax+0.1)
-#     plot.tick_params(bottom=False, labelbottom=False,
-#                    left=False, labelleft=False,
-#                    right=False, labelright=False,
-#                    top=False, labeltop=False)
-#     plot.set_ylabel(annot)
-#     print('Finished plotting ' , bdg,  '!')
+    plot.set_xlim(pstart, pend)
+    if ylim:
+        plot.set_ylim(0,ylim+0.1)
+    plot.set_ylim(0,ymax+0.1)
+    plot.tick_params(bottom=False, labelbottom=False,
+                   left=False, labelleft=False,
+                   right=False, labelright=False,
+                   top=False, labeltop=False)
+    plot.set_ylabel(annot)
+    print('Finished plotting ' , bdg,  '!')
+
 def plotlegend(ax, colorRange, colorPalette):
     y_ticks_axis, Y_ticks_labels = [0], ['0']
     bottom=0
@@ -665,17 +666,16 @@ def plotlegend(ax, colorRange, colorPalette):
     
     ax.set_yticks(ticks = y_ticks_axis, labels = Y_ticks_labels)
 
-def plotAllTrack(prediction, gtfFile, bins, region, pregion, na_thred = 0.5, 
-                 step = 40, outpath = '', prefix = '', ncluster = 3, method = '', 
+def plotAllTrack(prediction, gtfFile, bins, pregion, na_thred = 0.5, 
+                 step = 20, outpath = '', prefix = '', ncluster = 3, method = '', 
                  subset = False, colorPalette = 'viridis', colorRange = (0.3, 0.5, 0.6), vlines = '',
                  gtfFeatures = ['CDS', 'start_codon'],  genePlot = {'CDS': 'gene_name', 'start_codon': 'gene_name'}, 
                  geneSlot = {'CDS': 3, 'start_codon': 3}, gtfHeight = [0.8, 0.8], adjust_features = '',
                  trackHeight = 0.5, fontsize=10, track_ylim_adjust = 0.5, track_agg_adjust = 0.4, xticks_space = 120,
-                 fig_size = '', savefig = True, dpi = 800, seed = 42, modtrack_label = ''):
+                 fig_size = '', savefig = True, outfig = '', dpi = 800, seed = 42, modtrack_label = ''):
 
     print('Start clustering reads...')
-    labels, readnames, strands, mtx, bins = clusterRead(predict=prediction, outpath=outpath, prefix=prefix, 
-                                                  region=region, pregion=pregion, bins=bins, step =step, na_thred=na_thred,
+    labels, readnames, strands, mtx, bins = clusterRead(predict=prediction, outpath=outpath, prefix=prefix, pregion=pregion, bins=bins, step =step, na_thred=na_thred,
                                                   n_cluster=ncluster, method=method, random_state=seed, show_elbow = False)
     print('Finished clustering reads!')
 
@@ -714,7 +714,8 @@ def plotAllTrack(prediction, gtfFile, bins, region, pregion, na_thred = 0.5,
             ax2.axvline(x = vl, color = 'black', linestyle = 'dashed')
             ax2.text(vl+12, 0.7, label, fontsize=fontsize)
     if savefig:
-        outfig = outpath + prefix + '_' + region + '_' + method + '_clustered_reads.pdf'
+        if not outfig:
+            outfig = outpath + prefix + '_' + pregion + '_' + method + '_clustered_reads.pdf'
         plt.savefig(outfig, dpi=dpi)
 
 def plotPredictionScores(scores, modVars, modCounts, labels = ['pos', 'neg', 'chrom']):

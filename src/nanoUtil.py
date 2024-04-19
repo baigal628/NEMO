@@ -8,7 +8,7 @@ def parseEventAlign(eventAlign, outfile, reads, print_sequence = False, header =
     optional:
         print_sequence: if True, kmer sequence will be included in outfile.
     output: 
-        outfile: siganlAlign.tsv with format: readname\tchrom\teventStart(reference)\tsigList\tsigLenLsit
+        outfile: siganlAlign.tsv with format: readname\tchrom\teventStart(reference)\tsigList\tsigLenList
 
     E.g.    read1  ACGTGGCTGA
             events ACGTG
@@ -143,7 +143,7 @@ def parseSigAlign(sigalign, alignment):
 def fetchSignal(start, end, sigLenList, sigList, signalWindow):
     '''
     fetchSignal return a list of signals that are aligned to the givnen position.
-    Input parameters:
+    Input:
         start: start position to fetch signals
         sigLenList: a list with length of signals aligned to each genomic position
         sigList: a list of signals generated from one read.

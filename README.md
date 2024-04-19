@@ -118,6 +118,6 @@ python3 ./findNemo.py \
     --gtf ./data/ref/Saccharomyces_cerevisiae.R64-1-1.109.gtf
 ```
 <p align="middle">
-<img src="./img/240123_resnetv1_CLN2_step20_chrXVI:66000-67600__clustered_reads.pdf"/>
+<img src="./img/240123_resnetv1_CLN2_step20_chrXVI:66400-67550_clustered_reads.png"/>
 </p>
 
