@@ -1,3 +1,6 @@
+python3  ~/tools/NEMO/src/ref/bampod5kmersig-witharrow-sigalign.py -b can_mappings.bam -p can_reads.pod5 -o ../sigalign/can
+python3 ~/tools/NEMO/src/ref/bampod5kmersig-witharrow-sigalign.py -b mod_mappings.bam -p mod_reads.pod5 -o ../sigalign/mod
+
 python3  ~/tools/NEMO/src/train_nemo_r10.py \
     --exp_id test_r10_pod5_default \
     --neg_data ~/projects/ontMod/data/sigalign/can-sigalign.parquet \
