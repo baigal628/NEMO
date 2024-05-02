@@ -1,0 +1,205 @@
+2024-04-20 14:33:00,863 INFO    StreamThr :3379531 [internal.py:wandb_internal():86] W&B internal server running at pid: 3379531, started at: 2024-04-20 14:33:00.862596
+2024-04-20 14:33:00,865 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: status
+2024-04-20 14:33:00,874 INFO    WriterThread:3379531 [datastore.py:open_for_write():87] open: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/run-ak6noaps.wandb
+2024-04-20 14:33:00,875 DEBUG   SenderThread:3379531 [sender.py:send():379] send: header
+2024-04-20 14:33:00,906 DEBUG   SenderThread:3379531 [sender.py:send():379] send: run
+2024-04-20 14:33:01,210 INFO    SenderThread:3379531 [dir_watcher.py:__init__():211] watching files in: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files
+2024-04-20 14:33:01,211 INFO    SenderThread:3379531 [sender.py:_start_run_threads():1124] run started: ak6noaps with start time 1713648780.863616
+2024-04-20 14:33:01,238 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: check_version
+2024-04-20 14:33:01,239 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: check_version
+2024-04-20 14:33:01,338 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: run_start
+2024-04-20 14:33:01,341 DEBUG   HandlerThread:3379531 [system_info.py:__init__():26] System info init
+2024-04-20 14:33:01,341 DEBUG   HandlerThread:3379531 [system_info.py:__init__():41] System info init done
+2024-04-20 14:33:01,341 INFO    HandlerThread:3379531 [system_monitor.py:start():194] Starting system monitor
+2024-04-20 14:33:01,341 INFO    SystemMonitor:3379531 [system_monitor.py:_start():158] Starting system asset monitoring threads
+2024-04-20 14:33:01,342 INFO    HandlerThread:3379531 [system_monitor.py:probe():214] Collecting system info
+2024-04-20 14:33:01,342 INFO    SystemMonitor:3379531 [interfaces.py:start():190] Started cpu monitoring
+2024-04-20 14:33:01,343 INFO    SystemMonitor:3379531 [interfaces.py:start():190] Started disk monitoring
+2024-04-20 14:33:01,344 INFO    SystemMonitor:3379531 [interfaces.py:start():190] Started memory monitoring
+2024-04-20 14:33:01,345 INFO    SystemMonitor:3379531 [interfaces.py:start():190] Started network monitoring
+2024-04-20 14:33:01,465 DEBUG   HandlerThread:3379531 [system_info.py:probe():150] Probing system
+2024-04-20 14:33:01,473 DEBUG   HandlerThread:3379531 [system_info.py:_probe_git():135] Probing git
+2024-04-20 14:33:01,488 DEBUG   HandlerThread:3379531 [system_info.py:_probe_git():143] Probing git done
+2024-04-20 14:33:01,488 DEBUG   HandlerThread:3379531 [system_info.py:probe():198] Probing system done
+2024-04-20 14:33:01,488 DEBUG   HandlerThread:3379531 [system_monitor.py:probe():223] {'os': 'Linux-5.15.0-89-generic-x86_64-with-glibc2.35', 'python': '3.9.18', 'heartbeatAt': '2024-04-20T21:33:01.465750', 'startedAt': '2024-04-20T21:33:00.847278', 'docker': None, 'cuda': None, 'args': ('--exp_id', 'test_r10', '--neg_data', 'can-sigalign.parquet', '--pos_data', 'mod-sigalign.parquet', '--outpath', './output/', '--epochs', '5', '--steps_per_epoch', '50', '--val_steps_per_epoch', '50'), 'state': 'running', 'program': '/private/groups/brookslab/gabai/tools/NEMO/test/../src/train_nemo_r10.py', 'codePathLocal': None, 'codePath': 'src/train_nemo_r10.py', 'git': {'remote': 'git@github.com:baigal628/NEMO.git', 'commit': '7370f1103d1bdd747bc4f4c65b7747e0bab8d83d'}, 'email': 'gali.bai@hotmail.com', 'root': '/private/groups/brookslab/gabai/tools/NEMO', 'host': 'mustard', 'username': 'gabai', 'executable': '/private/groups/brookslab/gabai/miniconda3/envs/addseq/bin/python3', 'cpu_count': 80, 'cpu_count_logical': 160, 'cpu_freq': {'current': 1656.139143750001, 'min': 1200.0, 'max': 3000.0}, 'cpu_freq_per_core': [{'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2700.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2000.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1500.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2700.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1900.0, 'min': 1200.0, 'max': 3000.0}, {'current': 3000.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 3000.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2000.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.669, 'min': 1200.0, 'max': 3000.0}, {'current': 1800.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 2000.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.667, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 3000.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 3000.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.666, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.667, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2800.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.667, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.667, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 3000.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 1768.517, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}, {'current': 2593.668, 'min': 1200.0, 'max': 3000.0}, {'current': 1200.0, 'min': 1200.0, 'max': 3000.0}], 'disk': {'/': {'total': 65.44657897949219, 'used': 32.510597229003906}}, 'memory': {'total': 1511.7443161010742}}
+2024-04-20 14:33:01,488 INFO    HandlerThread:3379531 [system_monitor.py:probe():224] Finished collecting system info
+2024-04-20 14:33:01,488 INFO    HandlerThread:3379531 [system_monitor.py:probe():227] Publishing system info
+2024-04-20 14:33:01,488 DEBUG   HandlerThread:3379531 [system_info.py:_save_conda():207] Saving list of conda packages installed into the current environment
+2024-04-20 14:33:02,213 INFO    Thread-12 :3379531 [dir_watcher.py:_on_file_created():271] file/dir created: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/conda-environment.yaml
+2024-04-20 14:33:16,503 ERROR   HandlerThread:3379531 [system_info.py:_save_conda():221] Error saving conda packages: Command '['conda', 'env', 'export']' timed out after 15 seconds
+Traceback (most recent call last):
+  File "/private/groups/brookslab/gabai/miniconda3/envs/addseq/lib/python3.9/site-packages/wandb/sdk/internal/system/system_info.py", line 214, in _save_conda
+    subprocess.call(
+  File "/private/groups/brookslab/gabai/miniconda3/envs/addseq/lib/python3.9/subprocess.py", line 351, in call
+    return p.wait(timeout=timeout)
+  File "/private/groups/brookslab/gabai/miniconda3/envs/addseq/lib/python3.9/subprocess.py", line 1189, in wait
+    return self._wait(timeout=timeout)
+  File "/private/groups/brookslab/gabai/miniconda3/envs/addseq/lib/python3.9/subprocess.py", line 1925, in _wait
+    raise TimeoutExpired(self.args, timeout)
+subprocess.TimeoutExpired: Command '['conda', 'env', 'export']' timed out after 15 seconds
+2024-04-20 14:33:16,505 DEBUG   HandlerThread:3379531 [system_info.py:_save_conda():222] Saving conda packages done
+2024-04-20 14:33:16,509 INFO    HandlerThread:3379531 [system_monitor.py:probe():229] Finished publishing system info
+2024-04-20 14:33:16,513 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: status_report
+2024-04-20 14:33:16,513 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: keepalive
+2024-04-20 14:33:16,514 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: status_report
+2024-04-20 14:33:16,514 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: keepalive
+2024-04-20 14:33:16,514 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: status_report
+2024-04-20 14:33:16,514 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: keepalive
+2024-04-20 14:33:16,515 DEBUG   SenderThread:3379531 [sender.py:send():379] send: files
+2024-04-20 14:33:16,515 INFO    SenderThread:3379531 [sender.py:_save_file():1390] saving file wandb-metadata.json with policy now
+2024-04-20 14:33:16,871 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: python_packages
+2024-04-20 14:33:16,872 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: python_packages
+2024-04-20 14:33:16,874 DEBUG   SenderThread:3379531 [sender.py:send():379] send: telemetry
+2024-04-20 14:33:16,874 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: stop_status
+2024-04-20 14:33:16,875 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: stop_status
+2024-04-20 14:33:16,878 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: internal_messages
+2024-04-20 14:33:16,951 INFO    wandb-upload_0:3379531 [upload_job.py:push():131] Uploaded file /data/tmp/tmpnwg9_29bwandb/mxrfuv6t-wandb-metadata.json
+2024-04-20 14:33:17,218 INFO    Thread-12 :3379531 [dir_watcher.py:_on_file_created():271] file/dir created: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/wandb-metadata.json
+2024-04-20 14:33:17,219 INFO    Thread-12 :3379531 [dir_watcher.py:_on_file_created():271] file/dir created: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/output.log
+2024-04-20 14:33:17,219 INFO    Thread-12 :3379531 [dir_watcher.py:_on_file_created():271] file/dir created: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/requirements.txt
+2024-04-20 14:33:19,219 INFO    Thread-12 :3379531 [dir_watcher.py:_on_file_modified():288] file/dir modified: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/output.log
+2024-04-20 14:33:19,503 DEBUG   SenderThread:3379531 [sender.py:send():379] send: exit
+2024-04-20 14:33:19,503 INFO    SenderThread:3379531 [sender.py:send_exit():586] handling exit code: 1
+2024-04-20 14:33:19,503 INFO    SenderThread:3379531 [sender.py:send_exit():588] handling runtime: 18
+2024-04-20 14:33:19,504 INFO    SenderThread:3379531 [sender.py:_save_file():1390] saving file wandb-summary.json with policy end
+2024-04-20 14:33:19,505 INFO    SenderThread:3379531 [sender.py:send_exit():594] send defer
+2024-04-20 14:33:19,505 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: defer
+2024-04-20 14:33:19,505 INFO    HandlerThread:3379531 [handler.py:handle_request_defer():172] handle defer: 0
+2024-04-20 14:33:19,505 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: defer
+2024-04-20 14:33:19,505 INFO    SenderThread:3379531 [sender.py:send_request_defer():610] handle sender defer: 0
+2024-04-20 14:33:19,506 INFO    SenderThread:3379531 [sender.py:transition_state():614] send defer: 1
+2024-04-20 14:33:19,506 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: defer
+2024-04-20 14:33:19,506 INFO    HandlerThread:3379531 [handler.py:handle_request_defer():172] handle defer: 1
+2024-04-20 14:33:19,506 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: defer
+2024-04-20 14:33:19,506 INFO    SenderThread:3379531 [sender.py:send_request_defer():610] handle sender defer: 1
+2024-04-20 14:33:19,506 INFO    SenderThread:3379531 [sender.py:transition_state():614] send defer: 2
+2024-04-20 14:33:19,507 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: defer
+2024-04-20 14:33:19,507 INFO    HandlerThread:3379531 [handler.py:handle_request_defer():172] handle defer: 2
+2024-04-20 14:33:19,507 INFO    HandlerThread:3379531 [system_monitor.py:finish():203] Stopping system monitor
+2024-04-20 14:33:19,507 DEBUG   SystemMonitor:3379531 [system_monitor.py:_start():172] Starting system metrics aggregation loop
+2024-04-20 14:33:19,509 INFO    HandlerThread:3379531 [interfaces.py:finish():202] Joined cpu monitor
+2024-04-20 14:33:19,509 DEBUG   SystemMonitor:3379531 [system_monitor.py:_start():179] Finished system metrics aggregation loop
+2024-04-20 14:33:19,509 INFO    HandlerThread:3379531 [interfaces.py:finish():202] Joined disk monitor
+2024-04-20 14:33:19,509 DEBUG   SystemMonitor:3379531 [system_monitor.py:_start():183] Publishing last batch of metrics
+2024-04-20 14:33:19,509 INFO    HandlerThread:3379531 [interfaces.py:finish():202] Joined memory monitor
+2024-04-20 14:33:19,514 INFO    HandlerThread:3379531 [interfaces.py:finish():202] Joined network monitor
+2024-04-20 14:33:19,515 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: defer
+2024-04-20 14:33:19,515 INFO    SenderThread:3379531 [sender.py:send_request_defer():610] handle sender defer: 2
+2024-04-20 14:33:19,515 INFO    SenderThread:3379531 [sender.py:transition_state():614] send defer: 3
+2024-04-20 14:33:19,515 DEBUG   SenderThread:3379531 [sender.py:send():379] send: stats
+2024-04-20 14:33:19,516 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: defer
+2024-04-20 14:33:19,517 INFO    HandlerThread:3379531 [handler.py:handle_request_defer():172] handle defer: 3
+2024-04-20 14:33:19,518 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: defer
+2024-04-20 14:33:19,518 INFO    SenderThread:3379531 [sender.py:send_request_defer():610] handle sender defer: 3
+2024-04-20 14:33:19,518 INFO    SenderThread:3379531 [sender.py:transition_state():614] send defer: 4
+2024-04-20 14:33:19,518 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: defer
+2024-04-20 14:33:19,518 INFO    HandlerThread:3379531 [handler.py:handle_request_defer():172] handle defer: 4
+2024-04-20 14:33:19,519 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: defer
+2024-04-20 14:33:19,519 INFO    SenderThread:3379531 [sender.py:send_request_defer():610] handle sender defer: 4
+2024-04-20 14:33:19,519 INFO    SenderThread:3379531 [sender.py:transition_state():614] send defer: 5
+2024-04-20 14:33:19,519 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: defer
+2024-04-20 14:33:19,519 INFO    HandlerThread:3379531 [handler.py:handle_request_defer():172] handle defer: 5
+2024-04-20 14:33:19,519 DEBUG   SenderThread:3379531 [sender.py:send():379] send: summary
+2024-04-20 14:33:19,523 INFO    SenderThread:3379531 [sender.py:_save_file():1390] saving file wandb-summary.json with policy end
+2024-04-20 14:33:19,523 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: defer
+2024-04-20 14:33:19,523 INFO    SenderThread:3379531 [sender.py:send_request_defer():610] handle sender defer: 5
+2024-04-20 14:33:19,523 INFO    SenderThread:3379531 [sender.py:transition_state():614] send defer: 6
+2024-04-20 14:33:19,523 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: defer
+2024-04-20 14:33:19,523 INFO    HandlerThread:3379531 [handler.py:handle_request_defer():172] handle defer: 6
+2024-04-20 14:33:19,524 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: defer
+2024-04-20 14:33:19,524 INFO    SenderThread:3379531 [sender.py:send_request_defer():610] handle sender defer: 6
+2024-04-20 14:33:19,529 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: status_report
+2024-04-20 14:33:20,220 INFO    Thread-12 :3379531 [dir_watcher.py:_on_file_modified():288] file/dir modified: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/output.log
+2024-04-20 14:33:20,221 INFO    Thread-12 :3379531 [dir_watcher.py:_on_file_created():271] file/dir created: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/wandb-summary.json
+2024-04-20 14:33:20,503 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: poll_exit
+2024-04-20 14:33:20,636 INFO    SenderThread:3379531 [sender.py:transition_state():614] send defer: 7
+2024-04-20 14:33:20,636 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: poll_exit
+2024-04-20 14:33:20,637 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: defer
+2024-04-20 14:33:20,637 INFO    HandlerThread:3379531 [handler.py:handle_request_defer():172] handle defer: 7
+2024-04-20 14:33:20,637 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: defer
+2024-04-20 14:33:20,637 INFO    SenderThread:3379531 [sender.py:send_request_defer():610] handle sender defer: 7
+2024-04-20 14:33:21,221 INFO    Thread-12 :3379531 [dir_watcher.py:_on_file_modified():288] file/dir modified: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/config.yaml
+2024-04-20 14:33:21,221 INFO    Thread-12 :3379531 [dir_watcher.py:_on_file_modified():288] file/dir modified: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/output.log
+2024-04-20 14:33:21,504 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: poll_exit
+2024-04-20 14:33:21,845 INFO    SenderThread:3379531 [sender.py:transition_state():614] send defer: 8
+2024-04-20 14:33:21,846 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: poll_exit
+2024-04-20 14:33:21,846 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: defer
+2024-04-20 14:33:21,846 INFO    HandlerThread:3379531 [handler.py:handle_request_defer():172] handle defer: 8
+2024-04-20 14:33:21,847 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: defer
+2024-04-20 14:33:21,847 INFO    SenderThread:3379531 [sender.py:send_request_defer():610] handle sender defer: 8
+2024-04-20 14:33:21,847 INFO    SenderThread:3379531 [job_builder.py:build():318] Attempting to build job artifact
+2024-04-20 14:33:21,848 INFO    SenderThread:3379531 [job_builder.py:_get_source_type():455] is repo sourced job
+2024-04-20 14:33:21,910 INFO    SenderThread:3379531 [job_builder.py:build():431] adding wandb-job metadata file
+2024-04-20 14:33:21,934 INFO    SenderThread:3379531 [sender.py:transition_state():614] send defer: 9
+2024-04-20 14:33:21,935 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: defer
+2024-04-20 14:33:21,935 DEBUG   SenderThread:3379531 [sender.py:send():379] send: artifact
+2024-04-20 14:33:21,935 INFO    HandlerThread:3379531 [handler.py:handle_request_defer():172] handle defer: 9
+2024-04-20 14:33:22,222 INFO    Thread-12 :3379531 [dir_watcher.py:_on_file_modified():288] file/dir modified: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/output.log
+2024-04-20 14:33:22,417 INFO    SenderThread:3379531 [sender.py:send_artifact():1468] sent artifact job-git_github.com_baigal628_NEMO.git_src_train_nemo_r10.py - {'id': 'QXJ0aWZhY3Q6ODA0MTQxNTQ1', 'state': 'COMMITTED', 'artifactSequence': {'id': 'QXJ0aWZhY3RDb2xsZWN0aW9uOjE2NDc4OTMwMw==', 'latestArtifact': {'id': 'QXJ0aWZhY3Q6ODA0MTQxNTQ1', 'versionIndex': 0}}}
+2024-04-20 14:33:22,418 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: defer
+2024-04-20 14:33:22,418 INFO    SenderThread:3379531 [sender.py:send_request_defer():610] handle sender defer: 9
+2024-04-20 14:33:22,418 INFO    SenderThread:3379531 [dir_watcher.py:finish():358] shutting down directory watcher
+2024-04-20 14:33:22,506 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: poll_exit
+2024-04-20 14:33:23,223 INFO    SenderThread:3379531 [dir_watcher.py:finish():388] scan: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files
+2024-04-20 14:33:23,223 INFO    SenderThread:3379531 [dir_watcher.py:finish():402] scan save: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/requirements.txt requirements.txt
+2024-04-20 14:33:23,224 INFO    SenderThread:3379531 [dir_watcher.py:finish():402] scan save: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/wandb-metadata.json wandb-metadata.json
+2024-04-20 14:33:23,224 INFO    SenderThread:3379531 [dir_watcher.py:finish():402] scan save: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/wandb-summary.json wandb-summary.json
+2024-04-20 14:33:23,229 INFO    SenderThread:3379531 [dir_watcher.py:finish():402] scan save: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/conda-environment.yaml conda-environment.yaml
+2024-04-20 14:33:23,235 INFO    SenderThread:3379531 [dir_watcher.py:finish():402] scan save: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/output.log output.log
+2024-04-20 14:33:23,235 INFO    SenderThread:3379531 [dir_watcher.py:finish():402] scan save: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/config.yaml config.yaml
+2024-04-20 14:33:23,240 INFO    SenderThread:3379531 [sender.py:transition_state():614] send defer: 10
+2024-04-20 14:33:23,241 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: poll_exit
+2024-04-20 14:33:23,241 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: defer
+2024-04-20 14:33:23,245 INFO    HandlerThread:3379531 [handler.py:handle_request_defer():172] handle defer: 10
+2024-04-20 14:33:23,245 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: defer
+2024-04-20 14:33:23,246 INFO    SenderThread:3379531 [sender.py:send_request_defer():610] handle sender defer: 10
+2024-04-20 14:33:23,246 INFO    SenderThread:3379531 [file_pusher.py:finish():172] shutting down file pusher
+2024-04-20 14:33:23,507 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: poll_exit
+2024-04-20 14:33:23,507 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: poll_exit
+2024-04-20 14:33:23,512 INFO    wandb-upload_0:3379531 [upload_job.py:push():131] Uploaded file /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/requirements.txt
+2024-04-20 14:33:23,602 INFO    wandb-upload_1:3379531 [upload_job.py:push():131] Uploaded file /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/wandb-summary.json
+2024-04-20 14:33:23,608 INFO    wandb-upload_3:3379531 [upload_job.py:push():131] Uploaded file /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/config.yaml
+2024-04-20 14:33:23,668 INFO    wandb-upload_2:3379531 [upload_job.py:push():131] Uploaded file /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/files/output.log
+2024-04-20 14:33:23,869 INFO    Thread-11 :3379531 [sender.py:transition_state():614] send defer: 11
+2024-04-20 14:33:23,869 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: defer
+2024-04-20 14:33:23,869 INFO    HandlerThread:3379531 [handler.py:handle_request_defer():172] handle defer: 11
+2024-04-20 14:33:23,870 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: defer
+2024-04-20 14:33:23,870 INFO    SenderThread:3379531 [sender.py:send_request_defer():610] handle sender defer: 11
+2024-04-20 14:33:23,870 INFO    SenderThread:3379531 [file_pusher.py:join():178] waiting for file pusher
+2024-04-20 14:33:23,871 INFO    SenderThread:3379531 [sender.py:transition_state():614] send defer: 12
+2024-04-20 14:33:23,871 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: defer
+2024-04-20 14:33:23,871 INFO    HandlerThread:3379531 [handler.py:handle_request_defer():172] handle defer: 12
+2024-04-20 14:33:23,871 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: defer
+2024-04-20 14:33:23,871 INFO    SenderThread:3379531 [sender.py:send_request_defer():610] handle sender defer: 12
+2024-04-20 14:33:23,872 INFO    SenderThread:3379531 [file_stream.py:finish():614] file stream finish called
+2024-04-20 14:33:23,952 INFO    SenderThread:3379531 [file_stream.py:finish():618] file stream finish is done
+2024-04-20 14:33:23,952 INFO    SenderThread:3379531 [sender.py:transition_state():614] send defer: 13
+2024-04-20 14:33:23,952 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: defer
+2024-04-20 14:33:23,953 INFO    HandlerThread:3379531 [handler.py:handle_request_defer():172] handle defer: 13
+2024-04-20 14:33:23,953 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: defer
+2024-04-20 14:33:23,953 INFO    SenderThread:3379531 [sender.py:send_request_defer():610] handle sender defer: 13
+2024-04-20 14:33:23,953 INFO    SenderThread:3379531 [sender.py:transition_state():614] send defer: 14
+2024-04-20 14:33:23,954 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: defer
+2024-04-20 14:33:23,954 DEBUG   SenderThread:3379531 [sender.py:send():379] send: final
+2024-04-20 14:33:23,954 INFO    HandlerThread:3379531 [handler.py:handle_request_defer():172] handle defer: 14
+2024-04-20 14:33:23,954 DEBUG   SenderThread:3379531 [sender.py:send():379] send: footer
+2024-04-20 14:33:23,955 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: defer
+2024-04-20 14:33:23,955 INFO    SenderThread:3379531 [sender.py:send_request_defer():610] handle sender defer: 14
+2024-04-20 14:33:23,956 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: poll_exit
+2024-04-20 14:33:23,956 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: poll_exit
+2024-04-20 14:33:23,957 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: poll_exit
+2024-04-20 14:33:23,957 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: poll_exit
+2024-04-20 14:33:23,958 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: server_info
+2024-04-20 14:33:23,958 DEBUG   SenderThread:3379531 [sender.py:send_request():406] send_request: server_info
+2024-04-20 14:33:23,963 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: get_summary
+2024-04-20 14:33:23,964 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: sampled_history
+2024-04-20 14:33:23,964 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: internal_messages
+2024-04-20 14:33:24,053 INFO    MainThread:3379531 [wandb_run.py:_footer_history_summary_info():3936] rendering history
+2024-04-20 14:33:24,053 INFO    MainThread:3379531 [wandb_run.py:_footer_history_summary_info():3968] rendering summary
+2024-04-20 14:33:24,053 INFO    MainThread:3379531 [wandb_run.py:_footer_sync_info():3895] logging synced files
+2024-04-20 14:33:24,054 DEBUG   HandlerThread:3379531 [handler.py:handle_request():146] handle_request: shutdown
+2024-04-20 14:33:24,054 INFO    HandlerThread:3379531 [handler.py:finish():866] shutting down handler
+2024-04-20 14:33:24,958 INFO    WriterThread:3379531 [datastore.py:close():296] close: /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_143300-ak6noaps/run-ak6noaps.wandb
+2024-04-20 14:33:25,053 INFO    SenderThread:3379531 [sender.py:finish():1546] shutting down sender
+2024-04-20 14:33:25,053 INFO    SenderThread:3379531 [file_pusher.py:finish():172] shutting down file pusher
+2024-04-20 14:33:25,053 INFO    SenderThread:3379531 [file_pusher.py:join():178] waiting for file pusher

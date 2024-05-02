@@ -51,6 +51,7 @@ def load_parquet(filename, min_val=50, max_val=130, max_sequences=None):
     read pyarrow parquet file and reformat into a seq of signals.
     '''
     sequences = []
+    stop = False
     parquet_file = pq.ParquetFile(filename)
     for z in range(parquet_file.num_row_groups):
         batch = parquet_file.read_row_group(z)
@@ -62,7 +63,10 @@ def load_parquet(filename, min_val=50, max_val=130, max_sequences=None):
             sequences.append(signals)
             if max_sequences is not None:
                 if len(sequences) == max_sequences:
+                    stop = True
                     break
+        if stop:
+            break
     return sequences
 
 # Compute map for generating samples on-the-fly

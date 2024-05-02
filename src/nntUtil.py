@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from nanoUtil import fetchSignal
 import time
+import random
 
 def aggregate_scors(scores, method):
     if method == 'mean':
@@ -27,8 +28,8 @@ def nntPredict(signals, device, model, weights, signalWindow = 400, method = 'me
     
     probs = []
     
-    #Here I omit +1 from len(signals)-sigWindow+1 because len(signals) already has one extra signal that corresponds to next kmer window.
-    for sigIdx in range(len(signals)-signalWindow):
+    #Here I omit +1 from len(signals)-sigWindow+1 because len(signals) already has one extra signal that corresponds to next kmer window.    
+    for sigIdx in random.sample(len(signals)-signalWindow, 5):
         input_tensor[:, :, :] = sequence_tensor[sigIdx:sigIdx+signalWindow]
         prob = model(input_tensor).sigmoid().item()
         probs.append(prob)

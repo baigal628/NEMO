@@ -10,16 +10,20 @@ import torch
 import multiprocessing
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--mode', '-mode', type=str, action='store', help='three modes available: [train, predict, plot]')
+parser = argparse.ArgumentParser('NEMO')
+subparsers = parser.add_subparsers(help='sub-command help')
+parser_train = subparsers.add_parser('train', help='train neural network model on your data.')
+parser_train.add_argument('--pos', '-p', type=str)
+parser_train.add_argument('--neg', '-n', type=str)
 
+parser_predict = subparsers.add_parser('predict', help='train neural network model on your data.')
 # class input
-parser.add_argument('--region', '-r', default = 'all', type=str, action='store', help='genomic coordinates to perform modification predictions. E.g. chrI:2000-5000 or chrI or all (for whole genome).')
-parser.add_argument('--bam', '-b', default = '', type=str, action='store', help='path to sorted, indexed, and binarized alignment file.')
-parser.add_argument('--genome', '-g', default = '', type=str, action='store', help='reference genome fasta file')
-parser.add_argument('--eventalign', '-e', default='', type=str, action='store', help='nanopolish eventalign file.')
-parser.add_argument('--sigalign', '-s', default='', type=str, action='store', help='sigalign file if sigAlign file already exist. If not, must provide eventalign to generate sigAlign file.')
-parser.add_argument('--readlist', '-rl', default='', type=str, action='store', help='readId list created along with sigalign file.')
+parser_predict.add_argument('--region', '-r', default = 'all', type=str, action='store', help='genomic coordinates to perform modification predictions. E.g. chrI:2000-5000 or chrI or all (for whole genome).')
+parser_predict.add_argument('--bam', '-b', default = '', type=str, action='store', help='path to sorted, indexed, and binarized alignment file.')
+parser_predict.add_argument('--genome', '-g', default = '', type=str, action='store', help='reference genome fasta file')
+parser_predict.add_argument('--eventalign', '-e', default='', type=str, action='store', help='nanopolish eventalign file.')
+parser_predict.add_argument('--sigalign', '-s', default='', type=str, action='store', help='sigalign file if sigAlign file already exist. If not, must provide eventalign to generate sigAlign file.')
+parser_predict.add_argument('--readlist', '-rl', default='', type=str, action='store', help='readId list created along with sigalign file.')
 
 # class output
 parser.add_argument('--outpath', '-o', default='./', type=str, action='store', help='path to store the output files.')
@@ -107,13 +111,6 @@ class findNemo:
         # Store the readname index match into a file.
 
         print(len(self.reads), " reads mapped to ", region)
-        if sigalign:
-            self.sigalign = sigalign
-        elif eventalign:
-            self.sigalign = outpath + prefix + '_' + str(region) + '_sig.tsv'
-            parseEventAlign(eventAlign = eventalign, reads = self.reads, outfile = self.sigalign)
-        else:
-            print('None of sigalign or eventalign file is provided.')
         
         self.gene_regions = {
             'PHO5': 'chrII:429000-435000',
@@ -124,7 +121,14 @@ class findNemo:
             'NRG2': 'chrII:370000-379000',
             'RDN37': 'chrXII:450300-459300'
             }
-
+    
+    def eventTosigalign(self, eventalign):
+        
+        assert eventalign != '', "eventalign file not provided."
+        
+        self.sigalign = self.outpath + self.prefix + '_' + str(self.region) + '_sig.tsv'
+        parseEventAlign(eventAlign = eventalign, reads = self.reads, outfile = self.sigalign)
+    
     def doWork(self, work):
         (readID, strand, bins, step, aStart, aEnd, qStart, sigList, sigLenList, kmerWindow, signalWindow, device, model, weight) = work
         

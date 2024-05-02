@@ -1,0 +1,28 @@
+2024-04-20 14:29:43,495 INFO    MainThread:3377468 [wandb_setup.py:_flush():76] Current SDK version is 0.16.6
+2024-04-20 14:29:43,496 INFO    MainThread:3377468 [wandb_setup.py:_flush():76] Configure stats pid to 3377468
+2024-04-20 14:29:43,496 INFO    MainThread:3377468 [wandb_setup.py:_flush():76] Loading settings from /private/home/gabai/.config/wandb/settings
+2024-04-20 14:29:43,496 INFO    MainThread:3377468 [wandb_setup.py:_flush():76] Loading settings from /private/groups/brookslab/gabai/tools/NEMO/test/wandb/settings
+2024-04-20 14:29:43,496 INFO    MainThread:3377468 [wandb_setup.py:_flush():76] Loading settings from environment variables: {}
+2024-04-20 14:29:43,496 INFO    MainThread:3377468 [wandb_setup.py:_flush():76] Applying setup settings: {'_disable_service': False}
+2024-04-20 14:29:43,496 INFO    MainThread:3377468 [wandb_setup.py:_flush():76] Inferring run settings from compute environment: {'program_relpath': 'src/train_nemo_r10.py', 'program_abspath': '/private/groups/brookslab/gabai/tools/NEMO/src/train_nemo_r10.py', 'program': '/private/groups/brookslab/gabai/tools/NEMO/test/../src/train_nemo_r10.py'}
+2024-04-20 14:29:43,496 INFO    MainThread:3377468 [wandb_setup.py:_flush():76] Applying login settings: {}
+2024-04-20 14:29:43,496 INFO    MainThread:3377468 [wandb_init.py:_log_setup():521] Logging user logs to /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_142943-94tpvqoh/logs/debug.log
+2024-04-20 14:29:43,497 INFO    MainThread:3377468 [wandb_init.py:_log_setup():522] Logging internal logs to /private/groups/brookslab/gabai/tools/NEMO/test/wandb/run-20240420_142943-94tpvqoh/logs/debug-internal.log
+2024-04-20 14:29:43,497 INFO    MainThread:3377468 [wandb_init.py:init():561] calling init triggers
+2024-04-20 14:29:43,497 INFO    MainThread:3377468 [wandb_init.py:init():568] wandb.init called with sweep_config: {}
+config: {'architecture': 'resnet', 'learning_rate': 0.001, 'dataset': 'test_r10', 'epochs': 5, 'batch_size:': 128, 'opti:': 'adam', 'momentum:': 0.9, 'decay:': 0.0}
+2024-04-20 14:29:43,497 INFO    MainThread:3377468 [wandb_init.py:init():611] starting backend
+2024-04-20 14:29:43,497 INFO    MainThread:3377468 [wandb_init.py:init():615] setting up manager
+2024-04-20 14:29:43,500 INFO    MainThread:3377468 [backend.py:_multiprocessing_setup():105] multiprocessing start_methods=fork,spawn,forkserver, using: spawn
+2024-04-20 14:29:43,513 INFO    MainThread:3377468 [wandb_init.py:init():623] backend started and connected
+2024-04-20 14:29:43,529 INFO    MainThread:3377468 [wandb_init.py:init():715] updated telemetry
+2024-04-20 14:29:43,585 INFO    MainThread:3377468 [wandb_init.py:init():748] communicating run to backend with 90.0 second timeout
+2024-04-20 14:29:43,981 INFO    MainThread:3377468 [wandb_run.py:_on_init():2357] communicating current version
+2024-04-20 14:29:44,141 INFO    MainThread:3377468 [wandb_run.py:_on_init():2366] got version response 
+2024-04-20 14:29:44,141 INFO    MainThread:3377468 [wandb_init.py:init():799] starting run threads in backend
+2024-04-20 14:30:02,024 INFO    MainThread:3377468 [wandb_run.py:_console_start():2335] atexit reg
+2024-04-20 14:30:02,025 INFO    MainThread:3377468 [wandb_run.py:_redirect():2190] redirect: wrap_raw
+2024-04-20 14:30:02,027 INFO    MainThread:3377468 [wandb_run.py:_redirect():2255] Wrapping output streams.
+2024-04-20 14:30:02,027 INFO    MainThread:3377468 [wandb_run.py:_redirect():2280] Redirects installed.
+2024-04-20 14:30:02,029 INFO    MainThread:3377468 [wandb_init.py:init():842] run started, returning control to user process
+2024-04-20 14:30:10,954 WARNING MsgRouterThr:3377468 [router.py:message_loop():77] message_loop has been closed

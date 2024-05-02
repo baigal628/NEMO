@@ -21,7 +21,7 @@ def getAlignedReads(bam, region, genome, print_quer = False, print_name = False,
         rqstart: query start position. A string if single position is specified. A list of chromsome number if region is set as 'all'.
         rqend: query end position. A string if single position is specified. A list of chromsome number if region is set as 'all'.
     '''
-    
+    print('Collecting reads mapped to ', region, ' ...')
     cigarCode = {1: 'I', 2: 'D', 3: 'N'}
     regions = []
     # format is 'all'

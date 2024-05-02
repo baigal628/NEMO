@@ -1,0 +1,13 @@
+Device type: cpu
+Preparing unmodified...
+Loading csv...
+Traceback (most recent call last):
+  File "/private/groups/brookslab/gabai/tools/NEMO/test/../src/train_nemo_r10.py", line 115, in <module>
+    unmodified_sequences = load_data(args.neg_data,
+  File "/private/groups/brookslab/gabai/tools/NEMO/src/nanopore_dataset.py", line 54, in load_parquet
+    parquet_file = pq.ParquetFile(filename)
+  File "/private/groups/brookslab/gabai/miniconda3/envs/addseq/lib/python3.9/site-packages/pyarrow/parquet/core.py", line 323, in __init__
+    self.reader.open(
+  File "pyarrow/_parquet.pyx", line 1227, in pyarrow._parquet.ParquetReader.open
+  File "pyarrow/error.pxi", line 100, in pyarrow.lib.check_status
+pyarrow.lib.ArrowInvalid: Parquet magic bytes not found in footer. Either the file is corrupted or this is not a parquet file.

@@ -1,0 +1,23 @@
+Device type: cpu
+Preparing unmodified...
+Loading csv...
+0 group
+Creating sample map...
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 14/14 [00:01<00:00, 10.42it/s]
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 14/14 [00:00<00:00, 105045.18it/s]
+ 47%|█████████████████████████████████████████████████████████▏                                                                | 458557/978214 [00:00<00:00, 2313978.48it/s]
+Creating splits...
+Prepared.
+Preparing modified...
+100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 978214/978214 [00:00<00:00, 2447635.24it/s]
+Traceback (most recent call last):
+  File "/private/groups/brookslab/gabai/tools/NEMO/test/../src/train_nemo_r10.py", line 133, in <module>
+    modified_sequences = load_data(args.pos_data,
+  File "/private/groups/brookslab/gabai/tools/NEMO/src/nanopore_dataset.py", line 54, in load_parquet
+    parquet_file = pq.ParquetFile(filename)
+  File "/private/groups/brookslab/gabai/miniconda3/envs/addseq/lib/python3.9/site-packages/pyarrow/parquet/core.py", line 319, in __init__
+    source = filesystem.open_input_file(source)
+  File "pyarrow/_fs.pyx", line 770, in pyarrow._fs.FileSystem.open_input_file
+  File "pyarrow/error.pxi", line 144, in pyarrow.lib.pyarrow_internal_check_status
+  File "pyarrow/error.pxi", line 113, in pyarrow.lib.check_status
+FileNotFoundError: [Errno 2] Failed to open local file 'mod-sigalign.parquet'. Detail: [errno 2] No such file or directory

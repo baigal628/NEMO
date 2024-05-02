@@ -1,0 +1,54 @@
+wandb_version: 1
+
+architecture:
+  desc: null
+  value: resnet
+learning_rate:
+  desc: null
+  value: 0.001
+dataset:
+  desc: null
+  value: test_r10
+epochs:
+  desc: null
+  value: 5
+'batch_size:':
+  desc: null
+  value: 128
+'opti:':
+  desc: null
+  value: adam
+'momentum:':
+  desc: null
+  value: 0.9
+'decay:':
+  desc: null
+  value: 0.0
+_wandb:
+  desc: null
+  value:
+    python_version: 3.9.18
+    cli_version: 0.16.6
+    framework: torch
+    is_jupyter_run: false
+    is_kaggle_kernel: false
+    start_time: 1713648780.0
+    t:
+      1:
+      - 1
+      - 5
+      - 53
+      - 55
+      2:
+      - 1
+      - 5
+      - 53
+      - 55
+      3:
+      - 16
+      - 23
+      4: 3.9.18
+      5: 0.16.6
+      8:
+      - 5
+      13: linux-x86_64
