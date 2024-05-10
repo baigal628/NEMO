@@ -23,7 +23,7 @@ def nntPredict(signals, device, model, weights, signalWindow = 400, method = 'me
     model.to(device)
     
     # set input data
-    input_tensor = torch.zeros((1, 1, 400)).to(device)
+    input_tensor = torch.zeros((1, 1, signalWindow)).to(device)
     sequence_tensor = torch.tensor(signals)
     
     probs = []
