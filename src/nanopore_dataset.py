@@ -7,6 +7,7 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 from nntUtil import tune_signal
 import pyarrow.parquet as pq
+import random
 
 # Load all data into sequences
 def load_csv(filename, min_val=50, max_val=130, max_sequences=None):
@@ -49,6 +50,10 @@ def load_sigalign(filename, min_val=50, max_val=130, max_sequences=None):
 def load_parquet(filename, min_val=50, max_val=130, max_sequences=None):
     '''
     read pyarrow parquet file and reformat into a seq of signals.
+    input:
+        filename: path to parquet file.
+        min_val, max_val: threshold to tune signals
+        max_sequences: maximum number of reads to load per batches
     '''
     sequences = []
     stop = False
@@ -56,17 +61,16 @@ def load_parquet(filename, min_val=50, max_val=130, max_sequences=None):
     for z in range(parquet_file.num_row_groups):
         batch = parquet_file.read_row_group(z)
         print(z, 'group')
-        for i in range(batch.num_rows):
+        if max_sequences:
+            max_seq = min(batch.num_rows, max_sequences)
+            myranges = random.sample(range(batch.num_rows), max_seq)
+        else:
+            myranges = range(batch.num_rows)
+        for i in myranges:
             signals = batch['signals'][i].as_py()
             # siglenperkmer = batch['siglenperkmer'][i].as_py()
             signals = tune_signal(signals, min_val=min_val, max_val=max_val)
             sequences.append(signals)
-            if max_sequences is not None:
-                if len(sequences) == max_sequences:
-                    stop = True
-                    break
-        if stop:
-            break
     return sequences
 
 # Compute map for generating samples on-the-fly

@@ -5,6 +5,7 @@ import wandb
 
 # pytorch
 import torch
+import time
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -376,6 +377,8 @@ if __name__ == "__main__":
     print('Device type:', device)
 
     if not args.train_dataset:
+        print('Splitting data into train, test, and validation dataset.')
+        tstart = time.time()
         train_dataset, val_dataset = train_test_split(pos_data=args.pos_data, 
                                                       neg_data=args.neg_data, 
                                                       input_dtype=args.input_dtype,
@@ -389,9 +392,13 @@ if __name__ == "__main__":
                                                       device=device,
                                                       exp_id=args.exp_id,
                                                       model_type=args.model_type)
+        print(f'Finished splitting data in {round(time.time()-tstart, 3)} sec.')
     else:
+        print("Loading user defined data...")
+        tstart = time.time()
         train_dataset = torch.load(args.train_dataset)
         val_dataset = torch.load(args.val_dataset)
+        print(f'Finished loading user defined data in {round(time.time()-tstart, 3)} sec.')
     
     train_dataloader = DataLoader(train_dataset,
                                 batch_size=args.batch_size,
@@ -410,6 +417,8 @@ if __name__ == "__main__":
     # stats associated with best model
     metrics_fn = f'{args.outpath}/{args.exp_id}_{args.model_type}.csv'
 
+    print('Start training...')
+    tstart = time.time()
     train(train_dataloader=train_dataloader,
           val_dataloader=val_dataloader,
           exp_id=args.exp_id,
@@ -430,5 +439,5 @@ if __name__ == "__main__":
           best_model_accuracy_fn=best_model_accuracy_fn,
           metrics_fn=metrics_fn)
     
-    print('Training completed!')
+    print(f'Training completed in {round(time.time()-tstart, 3)} sec.')
     

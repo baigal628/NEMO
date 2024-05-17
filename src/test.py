@@ -177,8 +177,8 @@ accuracy = (correct[0] + correct[1]) / float(total[0] + total[1])
 
 true_negatives = correct[0]
 true_positives = correct[1]
-false_negatives = total[1] - correct[1]
-false_positives = total[0] - correct[0]
+false_negatives = total[0] - correct[0]
+false_positives = total[1] - correct[1]
 
 precision = true_positives / float(true_positives + false_positives)
 recall = true_positives / float(true_positives + false_negatives)
