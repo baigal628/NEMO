@@ -5,9 +5,12 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
-from nntUtil import tune_signal
 import pyarrow.parquet as pq
 import random
+
+def tune_signal(sigList, min_val=50, max_val=130):
+    new_sigList = [max(min_val, min(max_val, float(signal))) for signal in sigList]
+    return new_sigList
 
 # Load all data into sequences
 def load_csv(filename, min_val=50, max_val=130, max_sequences=None):
@@ -40,7 +43,7 @@ def load_sigalign(filename, min_val=50, max_val=130, max_sequences=None):
     with open(filename, 'r') as sigFile:
         for line in tqdm(sigFile):
             line = line.strip().split('\t')
-            signals = tune_signal(sigList = line[3].split(','), min_val=min_val, max_val=max_val)
+            signals = tune_signal(sigList = line[4].split(','), min_val=min_val, max_val=max_val)
             sequences.append(signals)
             if max_sequences is not None:
                 if len(sequences) == max_sequences:
@@ -56,12 +59,13 @@ def load_parquet(filename, min_val=50, max_val=130, max_sequences=None):
         max_sequences: maximum number of reads to load per batches
     '''
     sequences = []
-    stop = False
     parquet_file = pq.ParquetFile(filename)
+    print(f'{parquet_file.num_row_groups} total number of groups in current parquet file.')
     for z in range(parquet_file.num_row_groups):
         batch = parquet_file.read_row_group(z)
         print(z, 'group')
         if max_sequences:
+            # randomly select max_sequences reads from current batches
             max_seq = min(batch.num_rows, max_sequences)
             myranges = random.sample(range(batch.num_rows), max_seq)
         else:
@@ -74,7 +78,7 @@ def load_parquet(filename, min_val=50, max_val=130, max_sequences=None):
     return sequences
 
 # Compute map for generating samples on-the-fly
-def create_sample_map(sequences, seq_len=400):
+def create_sample_map(sequences, seq_len):
     sample_map = []
     for i, sequence in enumerate(tqdm(sequences)):
         for j in range(len(sequence) - (seq_len - 1)):
@@ -85,11 +89,11 @@ def create_sample_map(sequences, seq_len=400):
 # Create splits
 def create_splits(sequences,
                   sample_map,
-                  train_split=0.6,
-                  val_split=0.2,
-                  test_split=0.2,
-                  shuffle=True,
-                  seq_len=400):
+                  train_split,
+                  val_split,
+                  test_split,
+                  shuffle,
+                  seq_len):
 
     # Compute n_samples per split
     n_samples = len(sample_map)
@@ -140,9 +144,9 @@ class NanoporeDataset(Dataset):
                  unmodified_sample_map,
                  modified_sequences,
                  modified_sample_map,
-                 device='cpu',
-                 synthetic=False,
-                 seq_len=400):
+                 device,
+                 synthetic,
+                 seq_len):
 
         self.unmodified_sequences = unmodified_sequences
         self.unmodified_sample_map = unmodified_sample_map

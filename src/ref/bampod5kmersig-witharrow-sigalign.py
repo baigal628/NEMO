@@ -45,7 +45,8 @@ for s in samfile:
     if alignchr != 'chrM' and (not args.c or alignchr == args.c) and (not args.n or c < int(args.n)):
         if s.is_mapped and not s.is_supplementary and not s.is_secondary:
             alignstart, alignend = s.reference_start, s.reference_end
-        
+            base_qualities = s.query_qualities
+            if sum(base_qualities) / len(base_qualities) <= 10: continue
             if thischr == '': thischr = alignchr
             d += 1
             if thischr != alignchr or d % 1000 == 0:
@@ -91,15 +92,16 @@ with pq.ParquetWriter(outprefix + '-sigalign.parquet', temparrow.schema) as writ
         readtoseq = {}
         for s in samfile.fetch(chunkpos[0], chunkpos[1], chunkpos[2]):
             if s.is_mapped and not s.is_supplementary and not s.is_secondary:
-                alignstart = s.reference_start
-
+                # alignstart = s.reference_start if not s.is_reverse else s.reference_end
+                base_qualities = s.query_qualities
+                if sum(base_qualities) / len(base_qualities) <= 10: continue
                 readname = s.query_name
                 strand = -1 if s.is_reverse else 1
                 if readname in readchunks[chunkpos]:
                     chr = s.reference_name
-                    seq = s.query_sequence if not s.is_reverse else s.get_forward_sequence()
+                    seq = s.query_sequence #if not s.is_reverse else s.get_forward_sequence()
                     # if s.is_reverse: seq = getrevcomp(seq)
-                    len_seq = len(seq) - kmer_length + 1  # to get the number of kmers
+                    # len_seq = len(seq) - kmer_length + 1  # to get the number of kmers
                     seqlenforrev = len(seq)-1
                     refseq = s.get_reference_sequence()
                     queryrefpospairs = dict(s.get_aligned_pairs())
@@ -116,8 +118,8 @@ with pq.ParquetWriter(outprefix + '-sigalign.parquet', temparrow.schema) as writ
 
                     start_signal_idx = ts
                     currsiglen = 0
-                    kmer_idx = 0
-
+                    # kmer_idx = 0
+                    kmer_idx = 0 if strand == 1 else seqlenforrev
                     kmersigpos = []
 
                     ###making assumption that every base in the query seq represents a kmer and signal chunk
@@ -125,18 +127,18 @@ with pq.ParquetWriter(outprefix + '-sigalign.parquet', temparrow.schema) as writ
                         mv_val = mv[mvpos]
                         currsiglen += stride
                         if mv_val == 1 or mv_val == len_mv-1:
-                            if kmer_idx > 4 and kmer_idx <= seqlenforrev-4 and kmer_idx in queryrefpospairs:
-                                if queryrefpospairs[kmer_idx] != None:
-                                    truekmeridx = seqlenforrev-kmer_idx if strand==-1 else kmer_idx
-                                    kmersigpos.append((start_signal_idx, start_signal_idx+currsiglen, truekmeridx, seq[truekmeridx-4:truekmeridx+5], queryrefpospairs[kmer_idx], refseq[queryrefpospairs[kmer_idx]-alignstart])) #(kmer_idx, start_signal_idx, start_signal_idx+currsiglen))
+                            if kmer_idx in queryrefpospairs and queryrefpospairs[kmer_idx] != None:
+                                kmersigpos.append((start_signal_idx, start_signal_idx+currsiglen, queryrefpospairs[kmer_idx]))
+                            # kmersigpos.append((start_signal_idx, start_signal_idx+currsiglen)) #(kmer_idx, start_signal_idx, start_signal_idx+currsiglen))
                             start_signal_idx += currsiglen
                             currsiglen = 0
-                            kmer_idx += 1
+                            kmer_idx = kmer_idx + 1 if strand == 1 else kmer_idx - 1
                         mvpos += 1
-                    readtoseq[readname] = [chr, strand, alignstart, seq, kmersigpos]
+                    # print(kmersigpos)
+                    readtoseq[readname] = [chr, strand, s.reference_start, s.reference_end, kmersigpos]
 
         print('done processing bam file for chunk ', chunkpos)
-
+        c = 0
         readcodes = []
         for read in reader.reads(readchunks[chunkpos]):
             signal = read.signal_pa
@@ -148,13 +150,21 @@ with pq.ParquetWriter(outprefix + '-sigalign.parquet', temparrow.schema) as writ
             readname = str(read.read_id)
             if readname in readtoseq:
                 outline = [readname, readtoseq[readname][0], readtoseq[readname][2], [], []]
-                laststart = readtoseq[readname][2]
                 lastsigtot = 0
-                for sigstart, sigend, kmeridx, qkmer, refpos, refkmer in readtoseq[readname][-1]:
+                strand = readtoseq[readname][1]
+                laststart = readtoseq[readname][2] if strand == -1 else readtoseq[readname][3]
+                # print(strand, len(readtoseq[readname][-1]))
+                for sigstart, sigend, refpos in readtoseq[readname][-1]:
                     signalLen = sigend-sigstart
                     thissig = signal[sigstart:sigend]
+                    # if strand != 1:
+                    #     c += 1
+                    #     if c < 50: print(strand, laststart, refpos, signalLen, lastsigtot)
 
-                    if refpos > laststart + 1:
+                    if strand == 1 and refpos > laststart + 1:
+                        for i in range(laststart+1, refpos):
+                            outline[-1].append(lastsigtot)
+                    elif strand == -1 and refpos < laststart - 1:
                         for i in range(laststart+1, refpos):
                             outline[-1].append(lastsigtot)
 
@@ -162,13 +172,10 @@ with pq.ParquetWriter(outprefix + '-sigalign.parquet', temparrow.schema) as writ
                     lastsigtot += signalLen
                     outline[-1].append(lastsigtot)
                     laststart = refpos
-                # outline[-2] = ','.join(str(x) for x in outline[-2])
-                # outline[-1] = ','.join(str(x) for x in outline[-1])
-                # writer.write('\t'.join(outline) + '\n')
+
                 for j in range(5):
                     chunkdata[j].append(outline[j])
-
-
+                # print(len(outline[-2]), outline[-1][-1])
                 #     # thissig = [str(round(x, 2)) for x in thissig]
                 #     outdata = [readname, kmeridx, qkmer, refpos, refkmer, signalLen, thissig]#','.join(thissig)]
                 #     # binary_data = struct.pack("i", c) + struct.pack("i", kmeridx) + qkmer + struct.pack("i", refpos) + refkmer + struct.pack('i', signalLen) + struct.pack('f'*signalLen, *signal[pos[0]:pos[1]])
@@ -179,7 +186,7 @@ with pq.ParquetWriter(outprefix + '-sigalign.parquet', temparrow.schema) as writ
                 #         chunkdata[j].append(outdata[j])
                 # #readcodes.append((readname, c))
 
-                c += 1
+                # c += 1
                     #if c % 1000 == 0: print('processed ' + str(c) + ' reads from .pod5 file')
         print('processed pod5 data for chunk ', chunkpos)
 

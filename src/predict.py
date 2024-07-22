@@ -7,30 +7,41 @@ from bisect import bisect_left
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from torchsummary import summary
-from nntUtil import tune_signal
+from nanopore_dataset import tune_signal
 import multiprocessing
 from functools import partial
 import numpy as np
-from bamUtil import getAlignedReads
+from bamUtil import getAlignedReads, idxToReads
 import tempfile
 import subprocess
 import shutil
+import matplotlib.pyplot as plt
+
 
 from resnet1d import ResNet1D
 from nanopore_convnet import NanoporeConvNet
 from nanopore_transformer import NanoporeTransformer
 
-def IdxToReads(bam, region, ref, readID):
-    print('readling read list...')
-    readsToIdx = {}
-    with open(readID, 'r') as infile:
-        for line in infile:
-            line = line.strip().split('\t')
-            # readname: line[0] idx: line[1]
-            readsToIdx[line[0]] = line[1]
-    alignment, chrom, start, end = getAlignedReads(bam, region, ref)
-    myreads = {readsToIdx[r]:(r, alignment[r][3]) for r in alignment}
-    return myreads, chrom, start, end
+
+
+def aggregate_scores(scores, method, thred = 0.5):
+    if method == 'mean':
+        return np.nanmean(scores)
+    elif method == 'median':
+        return np.nanmedian(scores)
+    elif method == 'min':
+        return np.nanmin(scores)
+    elif method == 'max':
+        return np.nanmax(scores)
+    elif method == 'bin':
+        return np.sum([1 if i >= thred else 0 for i in scores ])/len(scores)
+
+def downsample_sample_map(sample_map, n):
+    dsample_map = {}
+    for chrom in sample_map:
+        chrom_map = [sample_map[chrom][i] for i in random.sample(range(len(sample_map[chrom])), n)]
+        dsample_map[chrom] = chrom_map
+    return dsample_map
 
 def create_pred_sample_map(sigalign, seq_len, readlist, step):
     '''
@@ -46,7 +57,6 @@ def create_pred_sample_map(sigalign, seq_len, readlist, step):
     '''
     sequences = {}
     sample_map = {}
-    idx = 0
     with open(sigalign) as infile:
         for line in infile:
             line = line.strip().split('\t')
@@ -76,7 +86,6 @@ def create_pred_sample_map(sigalign, seq_len, readlist, step):
                     sample_map[chrom].append((readIdx, siganl_move, chrom, start+kmer_move, end))              
                 while siganl_move == kmer_move_table[kmer_move]:
                     kmer_move +=1
-            idx +=1
     return (sample_map, sequences)
 
 class NanoporeDataset(Dataset):
@@ -120,7 +129,7 @@ def skewed_t_distribution(x, loc = 11 , scale = 10, df = 5, min_dist = 0.7):
 def predictMod(dataloader, model_type, device, seq_len, weight, kmer_len, max_batches, time_batch = False):
 
     pred_out = {}
-    
+    pred_out_list = []
     if model_type == 'convnet':
         model = NanoporeConvNet(input_size=seq_len).to(device)
     elif model_type == 'resnet':
@@ -169,12 +178,12 @@ def predictMod(dataloader, model_type, device, seq_len, weight, kmer_len, max_ba
             pred = model(sample).sigmoid()
             pred_time = time.time()-start_time
             for i in range(len(pred)):
-                thispred = round(pred[i].item(), 3)
+                thispred = int(pred[i].item()*256)
                 thisstart = start[i].item()
                 thisend = end[i].item()
-                for j in range(thisend):
+                pred_out_list.append(thispred)
+                for j in range(thisend+7):
                     thispos = thisstart+j
-                    # thispred = round(tdist[j]*thispredtot*256)
                     if chrom[i] not in pred_out: pred_out[chrom[i]] = {readIdx[i]:{thispos:[thispred]}}
                     elif readIdx[i] not in pred_out[chrom[i]]: pred_out[chrom[i]][readIdx[i]] = {thispos:[thispred]}
                     elif thispos not in pred_out[chrom[i]][readIdx[i]]: pred_out[chrom[i]][readIdx[i]][thispos] = [thispred]
@@ -184,9 +193,9 @@ def predictMod(dataloader, model_type, device, seq_len, weight, kmer_len, max_ba
                     print(f'predicted {idx} batch in: {pred_time} s!')
                     print(f'stored {idx} batch in: {time.time()-pred_time} s!')
             idx +=1
-    return pred_out
+    return pred_out, pred_out_list
 
-def predToBed12(predout, outfile, myreads, cutoff, save_raw=True):
+def predToBed12(predout, outfile, myreads, cutoff, method, save_raw=True):
     rgb = '0,0,0'
     outf = open(outfile, 'w')
     if save_raw:
@@ -208,7 +217,7 @@ def predToBed12(predout, outfile, myreads, cutoff, save_raw=True):
             poss = []
             scoress = []
             for (pos, scores) in sortedread:
-                score = int(np.median(scores)*256)
+                score = aggregate_scores(scores, method[0])
                 if save_raw:
                     if poss:
                         poss.append(pos-prepos)
@@ -234,15 +243,18 @@ def predToBed12(predout, outfile, myreads, cutoff, save_raw=True):
                     if thisblockStart:
                         blockSizes.append(thisblockSizes)
                         thisblockStart=0
+            
             # block continues to the end of the read
             if thisblockStart:
                 blockSizes.append(thisblockSizes)
                 thisblockStart=0
-            # add end of the reads
-            else:
-                blockStart.append(thickEnd-thickStart)
-                blockSizes.append(1)
                 blockCount+=1
+            
+            # add end of the reads
+            blockStart.append(thickEnd-thickStart)
+            blockSizes.append(1)
+            blockCount+=1
+            
             blockStart = ','.join(str(i) for i in blockStart)
             blockSizes = ','.join(str(i) for i in blockSizes)
             bed_out = f'{chrom}\t{thickStart}\t{thickEnd}\t{read}\t{round(score*1000)}\t{strand}\t{thickStart}\t{thickEnd}\t{rgb}\t{blockCount}\t{blockSizes}\t{blockStart}\n'
@@ -255,16 +267,21 @@ def predToBed12(predout, outfile, myreads, cutoff, save_raw=True):
     outf.close()
     outfr.close()
 
-def pred(chrom, myreads, sample_map, sequences, batch_size, seq_len, device, weight, kmer_len, max_batches, cutoff, tmpdir, prefix):
+def pred(chrom, myreads, sample_map, sequences, model_type, batch_size, seq_len, device, weight, kmer_len, max_batches, 
+         cutoff, tmpdir, prefix, method, return_pred=False, make_bed=True):
     tstart = time.time()
     print(f'Loading {chrom} data into pytorch...')
     pred_dataset = NanoporeDataset(sample_map[chrom], sequences, device, seq_len)
     pred_dataloader = DataLoader(pred_dataset, batch_size = batch_size, shuffle=True)
-    predout = predictMod(pred_dataloader, 'resnet', device, seq_len, weight, kmer_len, max_batches, cutoff)
-    bed12_out = os.path.join(tmpdir, prefix + '_' + chrom + '.bed')
-    predToBed12(predout, bed12_out, myreads, cutoff)
-    print(f'Prediction saved for {chrom}\n in {round(time.time()-tstart, 3)}s')
-    del pred_dataset, pred_dataloader, predout
+    predout, pred_out_list = predictMod(pred_dataloader, model_type, device, seq_len, weight, kmer_len, max_batches, cutoff)
+    if make_bed:
+        bed12_out = os.path.join(tmpdir, prefix + '_' + chrom + '.bed')
+        predToBed12(predout, bed12_out, myreads, cutoff, method)
+        print(f'Prediction saved for {chrom}\n in {round(time.time()-tstart, 3)}s')
+    if return_pred:
+        return predout, pred_out_list
+    else:
+        del pred_dataset, pred_out_list, pred_dataloader, predout
 
 def add_parser(parser):
     parser.add_argument('--sigalign', type = str, default='./', help = 'signal alignment file.')
@@ -282,6 +299,7 @@ def add_parser(parser):
     parser.add_argument('--outpath', type = str, default='./', help = 'output path.')
     parser.add_argument('--prefix', type = str, default='', help = 'outfile prefix.')
     parser.add_argument('--batch_size', type = int, default='', help = '')
+    parser.add_argument('--model_type', type = int, default='resnet', help = '')
     parser.add_argument('--max_batches', type = int, default=0, help = 'maximum batches to process per chromsome.')
     
 if __name__ == "__main__":
@@ -294,7 +312,7 @@ if __name__ == "__main__":
     if args.region:
         assert args.bam, args.ref
         print(f'Reading bam file and getting reads aligned to {args.region}')
-        myreads, chrom, start, end = IdxToReads(args.bam, args.region, args.ref, args.readID)
+        myreads, chrom, start, end = idxToReads(args.bam, args.region, args.ref, args.readID)
         readlist = [i for i in myreads]
         print(f'Collected total number of reads: {len(readlist)}')
     
@@ -347,5 +365,4 @@ if __name__ == "__main__":
 
     shutil.rmtree(tmp_dir)
     print('Done aggregating files.')
-
     print('Finished!')

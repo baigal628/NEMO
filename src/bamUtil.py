@@ -1,8 +1,9 @@
 import pysam
-from seqUtil import fetchSize, reverseCompliment
+import os
+from seqUtil import fetchSize, compliment
 
 def getAlignedReads(bam, region, genome, print_quer = False, print_name = False, refSeq = False, print_ref = False,
-                    print_align = False, reverse = False, include_quer = False):
+                    print_align = False, compliment_reverse = True, include_quer = False):
     '''
     Input:
         bam: input sam/bam file.
@@ -13,7 +14,8 @@ def getAlignedReads(bam, region, genome, print_quer = False, print_name = False,
         refSeq: Set True to store refernce sequences in the output.
         print_ref: Set True to print reference sequnce. If true, must provide genome.
         print_align: Set True to print align start and end of reads.
-        reverse: Set True to reverse compliment reads mapped to negative strands.
+        compliment_reverse: Set True to compliment reads mapped to reverse strands.
+        include_quer: include the read sequence in the out dictionary
 
     Output:
         out: a python dictionary with readname as key and chrom, alignstart, alignend, strand as value.
@@ -90,8 +92,9 @@ def getAlignedReads(bam, region, genome, print_quer = False, print_name = False,
                 
                 if print_name:
                     print(s.query_name)
-                if reverse:
-                    alignedRead = reverseCompliment(alignedRead)
+                if compliment_reverse:
+                    if strand == -1:
+                        alignedRead = compliment(alignedRead)
                 if print_quer:
                     qpos = qstart-alignstart
                     if qpos<0:
@@ -110,3 +113,41 @@ def getAlignedReads(bam, region, genome, print_quer = False, print_name = False,
         print('finshed fetching ', chrom, qstart, qend)
     samFile.close()
     return out, rchrom, rqstart, rqend
+
+
+def readstoIdx(outpath, prefix, bam = '', ref = '', region='', reads=''):
+    # fetch reads based on genomic alignment
+    outfile = os.path.join(outpath, prefix + '_readID.tsv')
+    
+    if region:
+        alignment, chrom, qStart, qEnd = getAlignedReads(bam, region, ref)
+        # readDict = {readname: (readID, strand)}
+        readDict = {r:(i, alignment[r][3]) for r,i in zip(alignment, range(len(alignment)))}
+    else:
+        readDict = {r:(i, alignment[r][3]) for r,i in zip(reads, range(len(reads)))}
+    
+    readFh = open(outfile, 'w')
+    readFh.write('readname\tread_id\tstrand\n')
+    for k,v in readDict.items(): readFh.write(f'{k}\t{v[0]}\t{v[1]}\n')
+    readFh.close()
+    
+    print(len(readDict), " reads in total.")
+    
+    return readDict
+
+def idxToReads(bam, region, ref, readID):
+    '''
+    
+    '''
+    
+    print('readling read list...')
+    readsToIdx = {}
+    with open(readID, 'r') as infile:
+        for line in infile:
+            line = line.strip().split('\t')
+            # readname: line[0] idx: line[1]
+            readsToIdx[line[0]] = line[1]
+    alignment, chrom, start, end = getAlignedReads(bam, region, ref)
+    myreads = {readsToIdx[r]:(r, alignment[r][3]) for r in alignment}
+    
+    return myreads, chrom, start, end

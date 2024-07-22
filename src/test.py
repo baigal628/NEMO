@@ -57,7 +57,7 @@ print('Device type:', device)
 assert args.model_type in ['convnet', 'resnet', 'transformer', 'phys']
 
 if args.model_type == 'convnet':
-    model = NanoporeConvNet(input_size=args.seq_len).to(device)
+    model = NanoporeConvNet().to(device)
 elif args.model_type == 'resnet':
     model = ResNet1D(
                 in_channels=1,
@@ -91,7 +91,6 @@ elif args.model_type == 'phys':
 model.load_state_dict(torch.load(args.weight, map_location=torch.device(device)))
 model.to(device)
 model.eval()
-summary(model, (1, 400), device = device)
 print("Created model and moved to the device.")
 
 

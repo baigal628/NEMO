@@ -24,8 +24,6 @@ from nanopore_convnet import NanoporeConvNet
 from nanopore_transformer import NanoporeTransformer
 
 
-
-
 #################################
 # train, validation, test split #
 #################################
@@ -176,7 +174,7 @@ def train(train_dataloader, val_dataloader, exp_id, model_type, opt, seq_len, de
                     increasefilter_gap=12,
                     use_do=False).to(device)
     
-    summary(model, (1, seq_len))
+    # summary(model, (1, seq_len))
     print("Created model and moved to the device.")
 
     # Create loss function and optimizer
