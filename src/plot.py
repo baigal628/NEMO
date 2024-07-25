@@ -26,7 +26,7 @@ def gettss(bed, genome, window, col = {'chrom':0, 'start':1, 'end':2, 'strand':5
 
 def plotmetagene(predout, bed, genome, window, method, sw='', space=150, labels=('distance to tss (bp)', 'prediction score'), 
                  thred = '', outpath='', prefix = '', color = 'tab:blue', legend = '', odd=False, ylim = (0,1), alpha=0.4, 
-                 return_value=False, strandness = True, bed_col = {'chrom':0, 'start':1, 'end':2, 'strand':5}):
+                 return_value=False, strandness = True, bed_col = {'chrom':0, 'start':1, 'end':2, 'strand':5}, plot_strand = ''):
     
     tssposs = gettss(bed=bed, genome=genome, window=window, col = bed_col)
 
@@ -40,11 +40,14 @@ def plotmetagene(predout, bed, genome, window, method, sw='', space=150, labels=
     for i in range(len(predout)):
         tssscores = [[] for i in range(window+1)]
         pred = predout[i]
-        for chrom, reads in pred.items():
+        for chrom, read_strands in pred.items():
             if chrom not in tssposs:
                 print(chrom, ' not in input bed.')
                 continue
-            for read, read_pred in reads.items():
+            for read_strand, read_pred in read_strands.items():
+                if plot_strand:
+                    if read_strand[1] != plot_strand:
+                        continue
                 if not read_pred:
                     continue
                 sortedread = sorted(read_pred.items())

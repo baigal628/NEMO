@@ -150,8 +150,9 @@ def splitSigalign(sigalign, ref, outpath, prefix):
         outFile = os.path.join(outpath, prefix + '_' + str(chr) + '_sigalign.tsv')
         outFh[str(chr)] = open(outFile, 'w')
     with open(sigalign, 'r') as sigFh:
+        header = sigFh.readlines(1)
         for line in sigFh:
-            chrom = line.strip().split('\t', 3)[1]
+            chrom = line.strip().split('\t', 4)[2]
             outFh[chrom].write(line)
     for chr in gsize:
         outFh[chr].close()
@@ -172,6 +173,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='eventalign to sigalign file.')           
     add_parser(parser)
     args = parser.parse_args()
+    
+    if not os.path.exists(args.outpath):
+        os.makedirs(args.outpath)
+        print(f"Directory '{args.outpath}' created.")
+    else:
+        print(f"Directory '{args.outpath}' already exists.")
+    
     reads = readstoIdx(outpath = args.outpath, prefix = args.prefix, bam = args.bam, ref = args.ref, region = args.region, reads = args.reads)
     parseEventAlign(args.eventalign, args.outpath, args.prefix, reads, header=args.header)
     if args.split_sig:

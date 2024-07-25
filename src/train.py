@@ -1,3 +1,4 @@
+import os
 import argparse
 import pandas as pd
 from tqdm import tqdm
@@ -373,6 +374,12 @@ if __name__ == "__main__":
     else:
         device = args.device
     print('Device type:', device)
+
+    if not os.path.exists(args.outpath):
+        os.makedirs(args.outpath)
+        print(f"Directory '{args.outpath}' created.")
+    else:
+        print(f"Directory '{args.outpath}' already exists.")
 
     if not args.train_dataset:
         print('Splitting data into train, test, and validation dataset.')

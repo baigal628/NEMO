@@ -115,16 +115,17 @@ def getAlignedReads(bam, region, genome, print_quer = False, print_name = False,
     return out, rchrom, rqstart, rqend
 
 
-def readstoIdx(outpath, prefix, bam = '', ref = '', region='', reads=''):
+def readstoIdx(outpath, prefix, region, bam = '', ref = '', reads=''):
+    '''
+    fetch reads mapped to region, create alignmen object and read to idx tsv file.
+    
+    '''
     # fetch reads based on genomic alignment
     outfile = os.path.join(outpath, prefix + '_readID.tsv')
-    
-    if region:
-        alignment, chrom, qStart, qEnd = getAlignedReads(bam, region, ref)
-        # readDict = {readname: (readID, strand)}
-        readDict = {r:(i, alignment[r][3]) for r,i in zip(alignment, range(len(alignment)))}
-    else:
-        readDict = {r:(i, alignment[r][3]) for r,i in zip(reads, range(len(reads)))}
+
+    alignment, chrom, qStart, qEnd = getAlignedReads(bam, region, ref)
+    # readDict = {readname: (readID, strand)}
+    readDict = {r:(i, alignment[r][3]) for r,i in zip(alignment, range(len(alignment)))}
     
     readFh = open(outfile, 'w')
     readFh.write('readname\tread_id\tstrand\n')
@@ -137,12 +138,13 @@ def readstoIdx(outpath, prefix, bam = '', ref = '', region='', reads=''):
 
 def idxToReads(bam, region, ref, readID):
     '''
-    
+    Given alread indexed reads as readID.tsv file, fetch reads mapped to the region and return read idx.
     '''
     
     print('readling read list...')
     readsToIdx = {}
     with open(readID, 'r') as infile:
+        header = infile.readlines(1)
         for line in infile:
             line = line.strip().split('\t')
             # readname: line[0] idx: line[1]

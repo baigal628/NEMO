@@ -41,6 +41,7 @@ def load_sigalign(filename, min_val=50, max_val=130, max_sequences=None):
     '''
     sequences = []
     with open(filename, 'r') as sigFile:
+        header = sigFile.readlines(1)
         for line in tqdm(sigFile):
             line = line.strip().split('\t')
             signals = tune_signal(sigList = line[4].split(','), min_val=min_val, max_val=max_val)

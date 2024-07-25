@@ -1,4 +1,5 @@
 from tqdm import tqdm
+import random
 import time
 import argparse
 import torch
@@ -25,6 +26,9 @@ from nanopore_transformer import NanoporeTransformer
 
 
 def aggregate_scores(scores, method, thred = 0.5):
+    '''
+    different methods to summarize a list of scores.
+    '''
     if method == 'mean':
         return np.nanmean(scores)
     elif method == 'median':
@@ -37,6 +41,9 @@ def aggregate_scores(scores, method, thred = 0.5):
         return np.sum([1 if i >= thred else 0 for i in scores ])/len(scores)
 
 def downsample_sample_map(sample_map, n):
+    '''
+    downsample n number of dataset from sample_map
+    '''
     dsample_map = {}
     for chrom in sample_map:
         chrom_map = [sample_map[chrom][i] for i in random.sample(range(len(sample_map[chrom])), n)]
@@ -58,32 +65,34 @@ def create_pred_sample_map(sigalign, seq_len, readlist, step):
     sequences = {}
     sample_map = {}
     with open(sigalign) as infile:
+        header = infile.readlines(1)
         for line in infile:
             line = line.strip().split('\t')
-            sequence = tune_signal(line[3].split(','))
-            chrom = line[1]
             readIdx = line[0]
+            strand = int(line[1])
+            chrom = line[2]
+            sequence = tune_signal(line[4].split(','))
             if readlist:
                 if readIdx not in readlist:
                     continue
             if chrom not in sample_map:
                 sample_map[chrom] = []
             sequences[readIdx] = sequence
-            kmer_move_table = list(map(int, line[4].split(',')))
-            start = int(line[2])
+            kmer_move_table = list(map(int, line[5].split(',')))
+            end_5 = int(line[3])
             siganl_move = 0
             kmer_move = 0
             for siganl_move in range(len(sequence)-seq_len+1):
+                pos_end = bisect_left(kmer_move_table, siganl_move+seq_len-1)
+                (left, right) = (end_5+kmer_move, end_5+pos_end) if strand == 1 else (end_5-pos_end, end_5-kmer_move)
                 # skip signals for a faster run
                 if step:
                     if siganl_move%step == 0:
-                        end = bisect_left(kmer_move_table, siganl_move+seq_len-1)-kmer_move+1
-                        # add (readIdx,  signalIdx, chrom, start, end (relative to start))
-                        sample_map[chrom].append((readIdx, siganl_move, chrom, start+kmer_move, end))
+                        # print(readIdx, strand, siganl_move, chrom, left, right)
+                        sample_map[chrom].append((readIdx, strand, siganl_move, chrom, left, right))
                 # move one signal at a time
                 else:
-                    end = bisect_left(kmer_move_table, siganl_move+seq_len-1)-kmer_move+1
-                    sample_map[chrom].append((readIdx, siganl_move, chrom, start+kmer_move, end))              
+                    sample_map[chrom].append((readIdx, siganl_move, chrom, left, right))           
                 while siganl_move == kmer_move_table[kmer_move]:
                     kmer_move +=1
     return (sample_map, sequences)
@@ -106,10 +115,10 @@ class NanoporeDataset(Dataset):
 
     def __getitem__(self, idx):
 
-        readIdx, signalIdx, chrom, start, end = self.pred_sample_map[idx]
+        readIdx, strand, signalIdx, chrom, start, end = self.pred_sample_map[idx]
         sample = torch.tensor([self.sequences[readIdx][signalIdx:signalIdx+self.seq_len]], device=self.device)
         
-        return sample, readIdx, chrom, start, end
+        return sample, readIdx, strand, chrom, start, end
 
 def skewed_t_distribution(x, loc = 11 , scale = 10, df = 5, min_dist = 0.7):
 
@@ -169,7 +178,8 @@ def predictMod(dataloader, model_type, device, seq_len, weight, kmer_len, max_ba
     print("Created model and moved to the device.")
     with torch.no_grad():
         idx = 0
-        for sample, readIdx, chrom, start, end in tqdm(dataloader):
+        # sample, readIdx, strand, chrom, start, end
+        for sample, readIdx, strand, chrom, start, end in tqdm(dataloader):
             if max_batches:
                 if idx > max_batches:
                     break
@@ -181,13 +191,15 @@ def predictMod(dataloader, model_type, device, seq_len, weight, kmer_len, max_ba
                 thispred = int(pred[i].item()*256)
                 thisstart = start[i].item()
                 thisend = end[i].item()
+                thisreadIdx = readIdx[i]
+                thisstrand = int(strand[i].item())
                 pred_out_list.append(thispred)
-                for j in range(thisend+7):
-                    thispos = thisstart+j
-                    if chrom[i] not in pred_out: pred_out[chrom[i]] = {readIdx[i]:{thispos:[thispred]}}
-                    elif readIdx[i] not in pred_out[chrom[i]]: pred_out[chrom[i]][readIdx[i]] = {thispos:[thispred]}
-                    elif thispos not in pred_out[chrom[i]][readIdx[i]]: pred_out[chrom[i]][readIdx[i]][thispos] = [thispred]
-                    else: pred_out[chrom[i]][readIdx[i]][thispos].append(thispred)
+                for thispos in range(thisstart, thisend+kmer_len):
+                    # print(thisstart, thisend+kmer_len-1, thispos, thispred)
+                    if chrom[i] not in pred_out: pred_out[chrom[i]] = {(thisreadIdx, thisstrand):{thispos:[thispred]}}
+                    elif (thisreadIdx, thisstrand) not in pred_out[chrom[i]]: pred_out[chrom[i]][(thisreadIdx, thisstrand)] = {thispos:[thispred]}
+                    elif thispos not in pred_out[chrom[i]][(thisreadIdx, thisstrand)]: pred_out[chrom[i]][(thisreadIdx, thisstrand)][thispos] = [thispred]
+                    else: pred_out[chrom[i]][(thisreadIdx, thisstrand)][thispos].append(thispred)
             if time_batch:
                 if idx%100 == 0:
                     print(f'predicted {idx} batch in: {pred_time} s!')
@@ -195,19 +207,18 @@ def predictMod(dataloader, model_type, device, seq_len, weight, kmer_len, max_ba
             idx +=1
     return pred_out, pred_out_list
 
-def predToBed12(predout, outfile, myreads, cutoff, method, save_raw=True):
+def predToBed12(predout, outfile, cutoff, method, save_raw=True):
     rgb = '0,0,0'
     outf = open(outfile, 'w')
     if save_raw:
         outfr = open(outfile.split('.bed')[0]+'.tsv', 'w')
     intcutoff = int(cutoff*256)
-    for chrom, reads in predout.items():
-        for read in reads:
-            if myreads:
-                strand = '-' if myreads[read][1] == -1 else '+'
-            else:
-                strand = '+'
-            sortedread = sorted(reads[read].items())
+    print(f'using {cutoff} as cutoff to binarize value and call nucleosomes...')
+    for chrom, read_strands in predout.items():
+        for read_strand in read_strands:
+            read = read_strand[0]
+            strand = '+' if read_strand[1] == 1 else '-'
+            sortedread = sorted(read_strands[read_strand].items())
             thickStart, thickEnd = sortedread[0][0], sortedread[-1][0]
             thisblockStart=0
             # add start of the reads
@@ -267,16 +278,19 @@ def predToBed12(predout, outfile, myreads, cutoff, method, save_raw=True):
     outf.close()
     outfr.close()
 
-def pred(chrom, myreads, sample_map, sequences, model_type, batch_size, seq_len, device, weight, kmer_len, max_batches, 
-         cutoff, tmpdir, prefix, method, return_pred=False, make_bed=True):
+def pred(chrom, myreads, sample_map, sequences, model_type, batch_size, seq_len, device, weight, max_batches, 
+         cutoff, tmpdir, prefix, method, kmer_len=6, return_pred=False, make_bed=True):
+    '''
+    make prediction for one chromsome.
+    '''
     tstart = time.time()
     print(f'Loading {chrom} data into pytorch...')
     pred_dataset = NanoporeDataset(sample_map[chrom], sequences, device, seq_len)
-    pred_dataloader = DataLoader(pred_dataset, batch_size = batch_size, shuffle=True)
+    pred_dataloader = DataLoader(pred_dataset, batch_size = batch_size, shuffle=False)
     predout, pred_out_list = predictMod(pred_dataloader, model_type, device, seq_len, weight, kmer_len, max_batches, cutoff)
     if make_bed:
         bed12_out = os.path.join(tmpdir, prefix + '_' + chrom + '.bed')
-        predToBed12(predout, bed12_out, myreads, cutoff, method)
+        predToBed12(predout, bed12_out, cutoff, method)
         print(f'Prediction saved for {chrom}\n in {round(time.time()-tstart, 3)}s')
     if return_pred:
         return predout, pred_out_list
@@ -287,10 +301,11 @@ def add_parser(parser):
     parser.add_argument('--sigalign', type = str, default='./', help = 'signal alignment file.')
     parser.add_argument('--bam', type = str, default='', help = 'BAM alignment file')
     parser.add_argument('--region', type = str, default='', help = 'region to call prediction.')
+    parser.add_argument('--readID', type = str, default='', help = 'read to idx tsv file.')
     parser.add_argument('--ref', type = str, default='', help = 'reference genome.')
     parser.add_argument('--cutoff', type = float, default=0.3, help = 'cutoff value to separate pos and neg prediction.')
-    parser.add_argument('--seq_len', type = int, default = 40, help = 'input signal length. DEFUALT:400.')
-    parser.add_argument('--kmer_len', type = int, default = 20, help = 'kmer length correponds to input signal length. DEFUALT:75.')
+    parser.add_argument('--seq_len', type = int, default = 400, help = 'input signal length. DEFUALT:400.')
+    parser.add_argument('--kmer_len', type = int, default = 6, help = 'kmer length in the pore. Ususally it is 6 for ONT R9 and 9 for ONT R10. DEFUALT:6.')
     parser.add_argument('--step', type = int, default=0, help = 'step size to take for creating sample map. DEFUALT:0.')
     parser.add_argument('--readlist', nargs="*", default=[], help = 'a list of readIdx to make predictions')
     parser.add_argument('--device', type = str, default='auto', help = 'device type for pytorch. DEFUALT: auto.')
@@ -314,6 +329,7 @@ if __name__ == "__main__":
         print(f'Reading bam file and getting reads aligned to {args.region}')
         myreads, chrom, start, end = idxToReads(args.bam, args.region, args.ref, args.readID)
         readlist = [i for i in myreads]
+        print(readlist[:10])
         print(f'Collected total number of reads: {len(readlist)}')
     
 
