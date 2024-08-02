@@ -153,3 +153,90 @@ def idxToReads(bam, region, ref, readID):
     myreads = {readsToIdx[r]:(r, alignment[r][3]) for r in alignment}
     
     return myreads, chrom, start, end
+
+
+def modBamtoPred(modbam, region=''):
+    typesOfMods = {'5mC':[('C', 0, 'm')], '5hmC': [('C', 0, 'h')], '5fC': [('C', 0, 'f')], '5caC': [('C', 0, 'c')],
+               '5hmU': [('T', 0, 'g')], '5fU': [('T', 0, 'e')], '5caU': [('T', 0, 'b')],
+               '6mA': [('A', 0, 'a'), ('A', 0, 'Y')], '8oxoG': [('G', 0, 'o')], 'Xao': [('N', 0, 'n')]}
+    
+    
+    compbase = {'A':'T', 'T':'A', 'C':'G', 'G':'C', 'N':'N'}
+    def getcomp(seq):
+        newseq = []
+        for base in seq: newseq.append(compbase[base])
+        return ''.join(newseq)#newseq[::-1]
+        
+    pred={}
+    samfile = pysam.AlignmentFile(modbam, "rb")
+    
+    if region:
+        chrom = region.split(':')[0]
+        if '-' in region:
+            locus = region.split(':')[1].split('-')
+            qstart, qend = int(locus[0]), int(locus[1])
+        reads = samfile.fetch(chrom, qstart, qend)
+    else:
+        reads = samfile
+    
+    for s in reads:
+        chr = s.reference_name
+        if chr not in pred:
+            pred[chr] = {}
+        if not s.is_secondary:
+            alignstart, alignend = s.reference_start, s.reference_end
+            readname = s.query_name
+            cigar = s.cigartuples
+            if not cigar:
+                continue
+            strand = -1 if s.is_reverse else 1
+            if (readname, strand) not in pred[chr]:
+                pred[chr][(readname, strand)] = {}
+            posstag = typesOfMods['6mA']
+            if s.is_reverse: posstag = [(x[0], 1, x[2]) for x in posstag]
+            ml = None
+            for t in posstag:
+                if t in s.modified_bases:
+                    ml = s.modified_bases[t]
+                    break
+            if not ml:
+                print(readname, 'does not have modification information', s.modified_bases.keys())
+                continue
+
+            if s.has_tag('MM'):
+                skippedBase = -1 if s.get_tag('MM').split(',', 2)[0][-1] == '?' else 0
+            elif s.has_tag('Mm'):
+                skippedBase = -1 if s.get_tag('Mm').split(',', 2)[0][-1] == '?' else 0
+            else:
+                continue
+
+            seq = s.query_sequence
+            seqlen = len(seq)
+            if s.is_reverse:  ###need to get compliment of sequence, but not reverse!!
+                seq = getcomp(seq)
+
+            seqApos = []
+            c = 0
+            for b in seq:
+                if b == 'A':
+                    seqApos.append(c)
+                c += 1
+
+            ml = dict(ml)
+            for i in seqApos:
+                if i not in ml:
+                    ml[i] = skippedBase
+
+            ref, quer = 0, 0
+            for block in cigar:
+                if block[0] in {0, 7, 8}:  # match, consumes both
+                    for i in range(block[1]):
+                        if quer in ml: pred[chr][(readname, strand)][ref + alignstart] = ml[quer]
+                        ref += 1
+                        quer += 1
+                elif block[0] in {1, 4}:  # consumes query
+                    quer += block[1]
+                elif block[0] in {2, 3}:  # consumes reference
+                    ref += block[1]
+            dirtowrite = '-' if s.is_reverse else '+'
+    return pred
