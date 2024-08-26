@@ -138,7 +138,7 @@ def readstoIdx(outpath, prefix, region, bam = '', ref = '', reads=''):
 
 def idxToReads(bam, region, ref, readID):
     '''
-    Given alread indexed reads as readID.tsv file, fetch reads mapped to the region and return read idx.
+    Given indexed reads as readID.tsv file, fetch reads mapped to the region and return read idx.
     '''
     
     print('readling read list...')

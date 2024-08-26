@@ -505,6 +505,7 @@ def plotModTrack(ax, labels, readnames, strands, mtx, bins, step = 40,
         elif label == 'readname':
             tick_yaxis.append(bottom)
             label_yaxis.append(str(readnames[i]))
+        
         if labels[i] != thiscluster:
 
             thiscluster = labels[i]
@@ -668,7 +669,7 @@ def plotlegend(ax, colorRange, colorPalette):
 
 def plotAllTrack(prediction, gtfFile, bins, pregion, na_thred = 0.5, 
                  step = 20, outpath = '', prefix = '', ncluster = 3, method = '', 
-                 subset = False, colorPalette = 'viridis', colorRange = (0.3, 0.5, 0.6), vlines = '',
+                 subset = '', colorPalette = 'viridis', colorRange = (0.3, 0.5, 0.6), vlines = '',
                  gtfFeatures = ['CDS', 'start_codon'],  genePlot = {'CDS': 'gene_name', 'start_codon': 'gene_name'}, 
                  geneSlot = {'CDS': 3, 'start_codon': 3}, gtfHeight = [0.8, 0.8], adjust_features = '',
                  trackHeight = 0.5, fontsize=10, track_ylim_adjust = 0.5, track_agg_adjust = 0.4, xticks_space = 120,
@@ -1129,3 +1130,92 @@ def plotAggregate(pred, bed, window, sw=10, step =20, end = False, space = 147, 
     plt.close()
     
     return (xval, yval)
+
+
+def plotmetagene(predout, bed, genome, window, method, sw='', space=150, labels=('distance to +1 nuc (bp)', 'prediction score'), 
+                 thred = '', outpath='', prefix = '', color = 'tab:blue', legend = '', odd=False, ylim = (0,1), alpha=0.4, 
+                 return_value=False, bed_col = {'chrom':0, 'start':1, 'end':2, 'strand':5}, strand = ''):
+    
+    tssposs = gettss(bed=bed, genome=genome, window=window, col = bed_col)
+
+    hw = window/2
+    all_tss_scores = []
+    
+    if not isinstance(predout, list):
+        predout = [predout]
+        color = [color]
+        legend = [legend]
+    for i in range(len(predout)):
+        tssscores = [[] for i in range(window+1)]
+        pred = predout[i]
+        for chrom, read_strands in pred.items():
+            if chrom not in tssposs:
+                print(chrom, ' not in input bed.')
+                continue
+            # for each read
+            for read_strand, read_pred in tqdm(read_strands.items()):
+                if strand:
+                    if read_strand[1] != strand:
+                        continue
+                if not read_pred:
+                    continue
+                sortedread = sorted(read_pred.items())
+                readStart, readEnd = sortedread[0][0], sortedread[-1][0]
+                # tsspos is a set with items (left, pos, right, dir)
+                for tsspos in tssposs[chrom]:
+                    # no more overlaping tsspos
+                    if readEnd < tsspos[0]:
+                        break
+                    # no everlap with this tsspos
+                    if readStart > tsspos[2]:
+                        continue
+                    # read overlaps with this tsspos
+                    for (pos, scores) in sortedread:
+                        # last pos falls in the window
+                        if pos > tsspos[2]:
+                            break
+                        if pos < tsspos[0]:
+                            continue
+                        repos = int(hw+pos-tsspos[1]) if tsspos[3] == '+' else int(tsspos[1]-pos+hw)
+                        score = aggregate_scores(scores, method[0])
+                        if odd:
+                            score = 0.99 if score == 1 else score
+                            score = np.log(score/(1-score))
+                        tssscores[repos].append(score)
+        
+        
+        tssscores = [aggregate_scores(x, method[1], thred) if len(x) > 0 else 0 for x in tssscores]
+        all_tss_scores.append(tssscores)
+        print(len(all_tss_scores))
+    
+
+    plt.figure(figsize=(6,4))
+    for i in range(len(all_tss_scores)):
+        tssscores = all_tss_scores[i]
+        print(len(tssscores))
+        if sw:
+            hsw = int(round(sw/2))
+            xval, yval = [], []
+            for j in range(hsw, (window+1)-(hsw+1), int(round(hsw/2))):
+                thesescores = tssscores[j-hsw:j+hsw]
+                avg = sum(thesescores)/len(thesescores)
+                yval.append(avg)
+                xval.append(j-hw)
+        else:
+            yval = tssscores
+            xval = np.arange(-hw, hw+1)
+        plt.plot(xval, yval, color=color[i], label=legend[i], alpha=alpha)
+    
+    plt.xticks(np.concatenate((np.flip(np.arange(0, -hw-1, -space)[1:]), np.arange(0, hw+1, space)), axis=0), rotation='vertical')
+    plt.grid(alpha=0.5,axis = 'x')
+    if ylim:
+        plt.ylim(ylim[0], ylim[1])
+    plt.legend()
+    plt.xlabel(labels[0])
+    plt.ylabel(labels[1])
+
+    plt.savefig(outpath+prefix+'_aggregate.pdf', bbox_inches='tight', dpi = 200)
+    plt.show()
+    plt.close()
+    if return_value:
+        return all_tss_scores

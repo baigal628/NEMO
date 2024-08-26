@@ -258,7 +258,7 @@ class ResNet1D(nn.Module):
 
     def forward(self, x):
 
-        out = (x - 90.) / 40. # Normalizing based on the dataset statistics
+        out = (x - 83.) / 17. # Normalizing based on the dataset statistics
 
         # first conv
         if self.verbose:

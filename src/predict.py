@@ -4,11 +4,12 @@ import time
 import argparse
 import torch
 import os
-from bisect import bisect_left
+import pyarrow.parquet as pq
+from bisect import bisect_left, bisect_right
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from torchsummary import summary
-from nanopore_dataset import tune_signal
+from nanopore_dataset import tune_signal, create_pred_sample_map_parquet
 import multiprocessing
 from functools import partial
 import numpy as np
@@ -22,8 +23,6 @@ import matplotlib.pyplot as plt
 from resnet1d import ResNet1D
 from nanopore_convnet import NanoporeConvNet
 from nanopore_transformer import NanoporeTransformer
-
-
 
 def aggregate_scores(scores, method, thred = 0.5):
     '''
@@ -39,63 +38,6 @@ def aggregate_scores(scores, method, thred = 0.5):
         return np.nanmax(scores)
     elif method == 'bin':
         return np.sum([1 if i >= thred else 0 for i in scores ])/len(scores)
-
-def downsample_sample_map(sample_map, n):
-    '''
-    downsample n number of dataset from sample_map
-    '''
-    dsample_map = {}
-    for chrom in sample_map:
-        chrom_map = [sample_map[chrom][i] for i in random.sample(range(len(sample_map[chrom])), n)]
-        dsample_map[chrom] = chrom_map
-    return dsample_map
-
-def create_pred_sample_map(sigalign, seq_len, readlist, step):
-    '''
-    create_pred_sample_map function reads signal alignment file and prepare sample map for training nnt model.
-    input:
-        sigalign: signal alignment file
-        seq_len: input signal dimension for nnt
-        readlist: a list of read indeces to make prediction on
-        step: step size for storing each sample
-    output:
-        sample_map: a list of sample map sets. each set consists of (read index,  signal index, chromsome, alignment start)
-        sequences: a list of sequencing reads.
-    '''
-    sequences = {}
-    sample_map = {}
-    with open(sigalign) as infile:
-        header = infile.readlines(1)
-        for line in infile:
-            line = line.strip().split('\t')
-            readIdx = line[0]
-            strand = int(line[1])
-            chrom = line[2]
-            sequence = tune_signal(line[4].split(','))
-            if readlist:
-                if readIdx not in readlist:
-                    continue
-            if chrom not in sample_map:
-                sample_map[chrom] = []
-            sequences[readIdx] = sequence
-            kmer_move_table = list(map(int, line[5].split(',')))
-            end_5 = int(line[3])
-            siganl_move = 0
-            kmer_move = 0
-            for siganl_move in range(len(sequence)-seq_len+1):
-                pos_end = bisect_left(kmer_move_table, siganl_move+seq_len-1)
-                (left, right) = (end_5+kmer_move, end_5+pos_end) if strand == 1 else (end_5-pos_end, end_5-kmer_move)
-                # skip signals for a faster run
-                if step:
-                    if siganl_move%step == 0:
-                        # print(readIdx, strand, siganl_move, chrom, left, right)
-                        sample_map[chrom].append((readIdx, strand, siganl_move, chrom, left, right))
-                # move one signal at a time
-                else:
-                    sample_map[chrom].append((readIdx, siganl_move, chrom, left, right))           
-                while siganl_move == kmer_move_table[kmer_move]:
-                    kmer_move +=1
-    return (sample_map, sequences)
 
 class NanoporeDataset(Dataset):
 
@@ -273,13 +215,13 @@ def predToBed12(predout, outfile, cutoff, method, save_raw=True):
             if save_raw:
                 allpos = ','.join(str(i) for i in poss)
                 allscores = ','.join(str(i) for i in scoress)
-                raw_out = f'{read}\t{chrom}\t{strand}\t{thickStart}\t{allpos}\t{allscores}\n'
+                raw_out = f'{read}\t{chrom}\t{strand}\t{thickStart}\t{thickEnd}\t{allpos}\t{allscores}\n'
                 outfr.write(raw_out)
     outf.close()
     outfr.close()
 
 def pred(chrom, myreads, sample_map, sequences, model_type, batch_size, seq_len, device, weight, max_batches, 
-         cutoff, tmpdir, prefix, method, kmer_len=6, return_pred=False, make_bed=True):
+         cutoff, tmpdir, prefix, method, kmer_len, return_pred=False, make_bed=True):
     '''
     make prediction for one chromsome.
     '''

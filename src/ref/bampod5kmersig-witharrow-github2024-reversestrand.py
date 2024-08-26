@@ -21,9 +21,9 @@ parser.add_argument('-o', '--outputprefix', action='store', dest='o',
 parser.add_argument('-s', '--scale', action='store_true', dest='s',
                     help='whether to scale the signal values to facillitate comparison between reads, requires that pod5 reads have a non-nan value in the predicted_scaling area')
 parser.add_argument('-c', '--chr', action='store', dest='c',
-                    help='[optional] chromosome to get reads from')
+                    help='chromosome to get reads from')
 parser.add_argument('-n', '--numreads', action='store', dest='n',
-                    help='[optional] number of reads to get. if -c is specified, will be first n reads on the chromosome specified, otherwise will be first n reads on first chr')
+                    help='number of reads to get. if -c is specified, will be first n reads on the chromosome specified, otherwise will be first n reads on first chr')
 
 args = parser.parse_args()
 
@@ -45,8 +45,7 @@ for s in samfile:
     if alignchr != 'chrM' and (not args.c or alignchr == args.c) and (not args.n or c < int(args.n)):
         if s.is_mapped and not s.is_supplementary and not s.is_secondary:
             alignstart, alignend = s.reference_start, s.reference_end
-            base_qualities = s.query_qualities
-            if sum(base_qualities) / len(base_qualities) <= 10: continue
+        
             if thischr == '': thischr = alignchr
             d += 1
             if thischr != alignchr or d % 1000 == 0:
@@ -67,6 +66,9 @@ print('done getting chunks of readnames')
 if not args.o: outprefix = '.'.join(args.b.split('/')[-1].split('.')[:-1])
 else: outprefix = args.o
 if args.s: outprefix += '-scaled'
+# out = open(outprefix + '-kmersignal.tsv', 'w')
+# out = open(outprefix + '-kmersignal.bin', 'wb')
+#out2 = open(outprefix + '-readnameToCode-arrow.tsv', 'w')
 
 kmer_length = 9
 
@@ -74,34 +76,26 @@ kmer_length = 9
 c = 0
 
 ###THIS will only work with merged pod5 files
-# columnnames = ['readcode','kmeridx', 'qkmer', 'refpos', 'refkmer', 'signalLen', 'signal']
-# temprow = [['abcdefg'], [0], ['AAAATAAAA'], [10000], ['T'], [5], [[1.2, 1.6, -.2, .7, 1.9]]]
-# temparrow = pa.RecordBatch.from_arrays(temprow, names=columnnames)
-
-columnnames = ['readname','chr', 'startpos', 'signals', 'siglenperkmer']
-temprow = [['abcdefg'], ['chr'], [0], [[1.2, 1.6, -.2, .7, 1.9]], [[1, 1, 5, 10, 20]]]
+columnnames = ['readcode','kmeridx', 'qkmer', 'refpos', 'refkmer', 'signalLen', 'signal']
+temprow = [['abcdefg'], [0], ['AAAATAAAA'], [10000], ['T'], [5], [[1.2, 1.6, -.2, .7, 1.9]]]
 temparrow = pa.RecordBatch.from_arrays(temprow, names=columnnames)
 
-
-# with pq.ParquetWriter(outprefix + '-kmersignal-complete.parquet', temparrow.schema) as writer:
-# with open(outprefix + '-sigalign.tsv', 'w') as writer:
-with pq.ParquetWriter(outprefix + '-sigalign.parquet', temparrow.schema) as writer:
+with pq.ParquetWriter(outprefix + '-kmersignal-complete.parquet', temparrow.schema) as writer:
     for chunkpos in readchunks:
         chunkdata = [[] for x in range(len(columnnames))]
         print(chunkpos, len(readchunks[chunkpos]))#, list(readchunks[chunkpos])[:5])
         readtoseq = {}
         for s in samfile.fetch(chunkpos[0], chunkpos[1], chunkpos[2]):
             if s.is_mapped and not s.is_supplementary and not s.is_secondary:
-                # alignstart = s.reference_start if not s.is_reverse else s.reference_end
-                base_qualities = s.query_qualities
-                if sum(base_qualities) / len(base_qualities) <= 10: continue
+                alignstart = s.reference_start
+
                 readname = s.query_name
                 strand = -1 if s.is_reverse else 1
                 if readname in readchunks[chunkpos]:
                     chr = s.reference_name
                     seq = s.query_sequence #if not s.is_reverse else s.get_forward_sequence()
                     # if s.is_reverse: seq = getrevcomp(seq)
-                    # len_seq = len(seq) - kmer_length + 1  # to get the number of kmers
+                    len_seq = len(seq) - kmer_length + 1  # to get the number of kmers
                     seqlenforrev = len(seq)-1
                     refseq = s.get_reference_sequence()
                     queryrefpospairs = dict(s.get_aligned_pairs())
@@ -118,8 +112,8 @@ with pq.ParquetWriter(outprefix + '-sigalign.parquet', temparrow.schema) as writ
 
                     start_signal_idx = ts
                     currsiglen = 0
-                    # kmer_idx = 0
                     kmer_idx = 0 if strand == 1 else seqlenforrev
+
                     kmersigpos = []
 
                     ###making assumption that every base in the query seq represents a kmer and signal chunk
@@ -127,19 +121,22 @@ with pq.ParquetWriter(outprefix + '-sigalign.parquet', temparrow.schema) as writ
                         mv_val = mv[mvpos]
                         currsiglen += stride
                         if mv_val == 1 or mv_val == len_mv-1:
-                            if kmer_idx in queryrefpospairs and queryrefpospairs[kmer_idx] != None:
-                                kmersigpos.append((start_signal_idx, start_signal_idx+currsiglen, queryrefpospairs[kmer_idx]))
-                            # kmersigpos.append((start_signal_idx, start_signal_idx+currsiglen)) #(kmer_idx, start_signal_idx, start_signal_idx+currsiglen))
+                            if kmer_idx > 4 and kmer_idx <= seqlenforrev-4 and kmer_idx in queryrefpospairs:
+                                truekmeridx = kmer_idx#seqlenforrev - kmer_idx if strand == -1 else kmer_idx
+                                if queryrefpospairs[kmer_idx] != None:
+                                    # if alignstart == 52303996:
+                                    #     print(start_signal_idx, start_signal_idx+currsiglen, truekmeridx, seq[truekmeridx-4:truekmeridx+5], queryrefpospairs[kmer_idx], refseq[queryrefpospairs[kmer_idx]-alignstart])
+                                    kmersigpos.append((start_signal_idx, start_signal_idx+currsiglen, truekmeridx, seq[truekmeridx-4:truekmeridx+5], queryrefpospairs[kmer_idx], refseq[queryrefpospairs[kmer_idx]-alignstart])) #(kmer_idx, start_signal_idx, start_signal_idx+currsiglen))
                             start_signal_idx += currsiglen
                             currsiglen = 0
                             kmer_idx = kmer_idx + 1 if strand == 1 else kmer_idx - 1
                         mvpos += 1
-                    # print(kmersigpos)
-                    readtoseq[readname] = [chr, strand, s.reference_start, s.reference_end, kmersigpos]
+                    readtoseq[readname] = [chr, strand, alignstart, seq, kmersigpos]
 
         print('done processing bam file for chunk ', chunkpos)
-        c = 0
+
         readcodes = []
+        posstrand, negstrand, negreverse = [], [], []
         for read in reader.reads(readchunks[chunkpos]):
             signal = read.signal_pa
             if args.s:
@@ -149,73 +146,51 @@ with pq.ParquetWriter(outprefix + '-sigalign.parquet', temparrow.schema) as writ
             else: signal = [float(x) for x in signal]
             readname = str(read.read_id)
             if readname in readtoseq:
-                outline = [readname, readtoseq[readname][0], readtoseq[readname][2], [], []]
-                lastsigtot = 0
-                strand = readtoseq[readname][1]
-                laststart = readtoseq[readname][2] if strand == -1 else readtoseq[readname][3]
-                # print(strand, len(readtoseq[readname][-1]))
-                for sigstart, sigend, refpos in readtoseq[readname][-1]:
+                # if readtoseq[readname][1] == -1: signal = signal[::-1]
+                print(readname, readtoseq[readname][1], readtoseq[readname][2], len(signal), readtoseq[readname][-1][0][0], len(signal)-readtoseq[readname][-1][-1][1])# [round(x) for x in signal[:20]])
+                # print(readtoseq[readname][1], readtoseq[readname][2], [round(x) for x in signal[-20:]])
+                for sigstart, sigend, kmeridx, qkmer, refpos, refkmer in readtoseq[readname][-1]:
                     signalLen = sigend-sigstart
                     thissig = signal[sigstart:sigend]
-                    # if strand != 1:
-                    #     c += 1
-                    #     if c < 50: print(strand, laststart, refpos, signalLen, lastsigtot)
+                    if readtoseq[readname][1] == -1: thissig = thissig[::-1]
+                    # if qkmer[2:-2] == 'CCTGT':
+                    #     if readtoseq[readname][1] == 1: posstrand.append(sum(thissig)/len(thissig))
+                    #     else:
+                    #         negstrand.append(sum(thissig)/len(thissig))
+                    #         negreverse.append(sum(signal[::-1][sigstart:sigend])/len(thissig))
+                    # thissig = [str(round(x, 2)) for x in thissig]
+                    outdata = [readname, kmeridx, qkmer, refpos, refkmer, signalLen, thissig]#','.join(thissig)]
+                    # binary_data = struct.pack("i", c) + struct.pack("i", kmeridx) + qkmer + struct.pack("i", refpos) + refkmer + struct.pack('i', signalLen) + struct.pack('f'*signalLen, *signal[pos[0]:pos[1]])
+                    # out.write(binary_data)
+                    # kmerpos += 1
+                    # out.write('\t'.join([str(x) for x in outdata]) + '\n')
+                    for j in range(7):
+                        chunkdata[j].append(outdata[j])
+                #readcodes.append((readname, c))
 
-                    if strand == 1 and refpos > laststart + 1:
-                        for i in range(laststart+1, refpos):
-                            outline[-1].append(lastsigtot)
-                    elif strand == -1 and refpos < laststart - 1:
-                        for i in range(refpos+1, laststart):
-                            outline[-1].append(lastsigtot)
-
-                    outline[-2].extend(thissig)
-                    lastsigtot += signalLen
-                    outline[-1].append(lastsigtot)
-                    laststart = refpos
-
-                for j in range(5):
-                    chunkdata[j].append(outline[j])
-                # print(len(outline[-2]), outline[-1][-1])
-                #     # thissig = [str(round(x, 2)) for x in thissig]
-                #     outdata = [readname, kmeridx, qkmer, refpos, refkmer, signalLen, thissig]#','.join(thissig)]
-                #     # binary_data = struct.pack("i", c) + struct.pack("i", kmeridx) + qkmer + struct.pack("i", refpos) + refkmer + struct.pack('i', signalLen) + struct.pack('f'*signalLen, *signal[pos[0]:pos[1]])
-                #     # out.write(binary_data)
-                #     # kmerpos += 1
-                #     # out.write('\t'.join([str(x) for x in outdata]) + '\n')
-                #     for j in range(7):
-                #         chunkdata[j].append(outdata[j])
-                # #readcodes.append((readname, c))
-
-                # c += 1
+                c += 1
                     #if c % 1000 == 0: print('processed ' + str(c) + ' reads from .pod5 file')
         print('processed pod5 data for chunk ', chunkpos)
-
-
-
-
         arrowtable = pa.RecordBatch.from_arrays(chunkdata, names=columnnames)  # pa.Table.from_pydict(mydata)
-
         writer.write_batch(arrowtable)
         #for r in readcodes:
         #    out2.write(str(r[1]) + '\t' + r[0] + '\n')
         print('wrote arrow file for chunk ', chunkpos)
-                
 
+# print(len(posstrand), len(negstrand), len(negreverse))
+# plt.figure()
+# plt.hist(posstrand, bins=20, label='pos', alpha=0.3)
+# plt.hist(negstrand, bins=20, label='neg', alpha=0.3)
+# plt.hist(negreverse, bins=20, label='negreverse', alpha=0.3)
+# plt.legend()
+# plt.savefig('temp.png', dpi=600)
+
+# out = open('.'.join(sys.argv[2].split('.')[:-1]) + '-kmersignal.pickle', 'wb')
+# pickle.dump(signallines, out)
+#print('done processing pod5 files')
 samfile.close()
 
 
-###['readname','chr', 'startpos', 'signals', 'siglenperkmer']
-###to open the parquet table and read it
-# parquet_file = pq.ParquetFile(sigfile)
-# print(parquet_file.num_row_groups)
-# for z in range(parquet_file.num_row_groups):
-#     batch = parquet_file.read_row_group(z)
-#     print(z, 'group')
-#     for i in range(batch.num_rows):
-#         readname = batch['readname'][i].as_py()
-#         thischr = batch['chr'][i].as_py()
-#         startpos = batch['startpos'][i].as_py()
-#         signals = batch['readname'][i].as_py()
-#         siglenperkmer = batch['siglenperkmer'][i].as_py()
+#print('done writing readnames key')
 
 

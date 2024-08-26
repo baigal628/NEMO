@@ -30,7 +30,7 @@ from nanopore_transformer import NanoporeTransformer
 #################################
 
 
-def train_test_split(pos_data, neg_data, input_dtype, seq_len, min_val, max_val, max_seqs, train_split, val_split, test_split, device, exp_id, model_type):
+def train_test_split(pos_data, neg_data, input_dtype, seq_len, step, min_val, max_val, max_seqs, train_split, val_split, test_split, device, exp_id, model_type):
     if input_dtype == 'sigalign':
         load_data = load_sigalign
     elif input_dtype == 'parquet':
@@ -42,18 +42,21 @@ def train_test_split(pos_data, neg_data, input_dtype, seq_len, min_val, max_val,
                                     min_val=min_val,
                                     max_val=max_val,
                                     max_sequences=max_seqs)
+    
+    print(f'Number of unmodified reads: {len(unmodified_sequences)}')
     print("Creating sample map...")
     unmodified_sample_map = create_sample_map(unmodified_sequences,
-                                            seq_len=seq_len)
-
+                                            seq_len=seq_len, step=step)
+    print(f'Number of unmodified samples: {len(unmodified_sample_map)}')
     print("Creating splits...")
     unmodified_train, unmodified_val, unmodified_test = create_splits(unmodified_sequences,
-                                                                    unmodified_sample_map,
-                                                                    train_split=train_split,
-                                                                    val_split=val_split,
-                                                                    test_split=test_split,
-                                                                    shuffle=True,
-                                                                    seq_len=seq_len)
+                                                                        unmodified_sample_map,
+                                                                        train_split=train_split,
+                                                                        val_split=val_split,
+                                                                        test_split=test_split,
+                                                                        shuffle=True,
+                                                                        seq_len=seq_len, step=step)
+    print(f'Number of unmodified train: {len(unmodified_train)}, val: {len(unmodified_val)}, test: {len(unmodified_test)}')
     print("Prepared.")
 
     print("Preparing modified...")
@@ -62,9 +65,11 @@ def train_test_split(pos_data, neg_data, input_dtype, seq_len, min_val, max_val,
                                     min_val=min_val,
                                     max_val=max_val,
                                     max_sequences=max_seqs)
+    print(f'Number of modified reads: {len(modified_sequences)}')
     print("Creating sample map...")
     modified_sample_map = create_sample_map(modified_sequences,
-                                            seq_len=seq_len)
+                                            seq_len=seq_len, step=step)
+    print(f'Number of modified samples: {len(modified_sample_map)}')
     print("Creating splits...")
     modified_train, modified_val, modified_test = create_splits(modified_sequences,
                                                                 modified_sample_map,
@@ -72,7 +77,8 @@ def train_test_split(pos_data, neg_data, input_dtype, seq_len, min_val, max_val,
                                                                 val_split=val_split,
                                                                 test_split=test_split,
                                                                 shuffle=True,
-                                                                seq_len=seq_len)
+                                                                seq_len=seq_len, step=step)
+    print(f'Number of modified train: {len(modified_train)}, val: {len(modified_val)}, test: {len(modified_test)}')
     print("Prepared.")
 
     ###############################
@@ -111,6 +117,7 @@ def train_test_split(pos_data, neg_data, input_dtype, seq_len, min_val, max_val,
         torch.save(val_dataset, f'{args.outpath}/val_dataset_{exp_id}_{model_type}.pt')
         torch.save(train_dataset, f'{args.outpath}/train_dataset_{exp_id}_{model_type}.pt')
         torch.save(test_dataset, f'{args.outpath}/test_dataset_{exp_id}_{model_type}.pt')
+        del test_dataset
     
     return train_dataset, val_dataset
 
@@ -341,9 +348,10 @@ def add_parser(parser):
     parser.add_argument('--val_dataset', type= str, default='', help='custom pytorch dataset for validation.')
 
     #input and output data preprocessing parameters
-    parser.add_argument('--min_val', type=float, default=50) # Used to clip outliers
-    parser.add_argument('--max_val', type=float, default=130) # Used to clip outliers
+    parser.add_argument('--min_val', type=float, default=-50) # Used to clip outliers
+    parser.add_argument('--max_val', type=float, default=150) # Used to clip outliers
     parser.add_argument('--seq_len', type=int, default=400)
+    parser.add_argument('--step', type=int, default=50)
     parser.add_argument('--max_seqs', type=int, default=None)
     parser.add_argument('--outpath', type=str, default='./')
 
@@ -388,6 +396,7 @@ if __name__ == "__main__":
                                                       neg_data=args.neg_data, 
                                                       input_dtype=args.input_dtype,
                                                       seq_len=args.seq_len,
+                                                      step=args.step,
                                                       min_val=args.min_val,
                                                       max_val= args.max_val,
                                                       max_seqs=args.max_seqs,
@@ -411,6 +420,9 @@ if __name__ == "__main__":
     val_dataloader = DataLoader(val_dataset,
                                 batch_size=args.batch_size,
                                 shuffle=True)
+    
+    print(f'number of batches in train: {len(train_dataloader)}')
+    print(f'number of batches in val: {len(val_dataloader)}')
     
     ###############
     # set outfile #

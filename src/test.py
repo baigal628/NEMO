@@ -179,17 +179,33 @@ true_positives = correct[1]
 false_negatives = total[0] - correct[0]
 false_positives = total[1] - correct[1]
 
+tpr = true_positives/float(true_positives + false_negatives)
+fpr = false_positives/float(true_negatives + false_positives)
+tnr = true_negatives/float(true_negatives + false_positives)
+fnr = false_negatives/float(true_positives + false_negatives)
+
+
+accuracy = (correct[0] + correct[1]) / float(total[0] + total[1])
 precision = true_positives / float(true_positives + false_positives)
 recall = true_positives / float(true_positives + false_negatives)
+f1 = 2 * (precision * recall) / (precision + recall)
+
 
 print("True negatives:", true_negatives)
 print("True positives:", true_positives)
 print("False negatives:", false_negatives)
 print("False positives:", false_positives)
 
+print(f'tpr={tpr}, fpr={fpr}, tnr={tnr}, fnr={fnr}')
 print("Accuracy:", accuracy)
 print("Precision:", precision)
 print("Recall:", recall)
+print("F1:", f1)
+
+performance_out = open(f'{args.outpath}/{args.exp_id}_{args.model_type}_test_pred.tsv', 'w')
+performance_out.write(f'tpr\tfpr\ttnr\tfnr\taccuracy\tprecision\trecall\tf1\n')
+performance_out.write(f'{tpr}\t{fpr}\t{tnr}\t{fnr}\t{accuracy}\t{precision}\t{recall}\t{f1}\n')
+performance_out.close()
 
 # Plot prediction mean and std for each sequence in test dateset
 seq_means = {0: [], 1: []}
