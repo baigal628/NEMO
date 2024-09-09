@@ -3,6 +3,7 @@ import argparse
 import pandas as pd
 from tqdm import tqdm
 import wandb
+import numpy as np
 
 # pytorch
 import torch
@@ -79,6 +80,10 @@ def train_test_split(pos_data, neg_data, input_dtype, seq_len, step, min_val, ma
                                                                 shuffle=True,
                                                                 seq_len=seq_len, step=step)
     print(f'Number of modified train: {len(modified_train)}, val: {len(modified_val)}, test: {len(modified_test)}')
+
+    print('computing mean and std...')
+    mymean = np.mean([item for sublist in modified_sequences + unmodified_sequences for item in sublist])
+    mystd = np.std([item for sublist in modified_sequences + unmodified_sequences for item in sublist])
     print("Prepared.")
 
     ###############################
@@ -119,13 +124,13 @@ def train_test_split(pos_data, neg_data, input_dtype, seq_len, step, min_val, ma
         torch.save(test_dataset, f'{args.outpath}/test_dataset_{exp_id}_{model_type}.pt')
         del test_dataset
     
-    return train_dataset, val_dataset
+    return train_dataset, val_dataset, mymean, mystd
 
 ################
 # set up model #
 ################
 
-def train(train_dataloader, val_dataloader, exp_id, model_type, opt, seq_len, device, epochs, steps_per_epoch, val_steps_per_epoch, batch_size, 
+def train(train_dataloader, val_dataloader, exp_id, model_type, opt, seq_len, mean, std, device, epochs, steps_per_epoch, val_steps_per_epoch, batch_size, 
           lr, decay, momentum, patience, wandb_id, best_model_fn, best_model_accuracy_fn, metrics_fn):
 
     if wandb_id:
@@ -161,6 +166,8 @@ def train(train_dataloader, val_dataloader, exp_id, model_type, opt, seq_len, de
                     groups=1,
                     n_block=8,
                     n_classes=2,
+                    mean=mean, 
+                    std=std,
                     downsample_gap=2,
                     increasefilter_gap=4,
                     use_do=False).to(device)
@@ -178,6 +185,8 @@ def train(train_dataloader, val_dataloader, exp_id, model_type, opt, seq_len, de
                     groups=32,
                     n_block=48,
                     n_classes=2,
+                    mean=mean, 
+                    std=std,
                     downsample_gap=6,
                     increasefilter_gap=12,
                     use_do=False).to(device)
@@ -353,6 +362,8 @@ def add_parser(parser):
     parser.add_argument('--seq_len', type=int, default=400)
     parser.add_argument('--step', type=int, default=50)
     parser.add_argument('--max_seqs', type=int, default=None)
+    parser.add_argument('--mean', type=float, default=80.)
+    parser.add_argument('--std', type=float, default=16.)
     parser.add_argument('--outpath', type=str, default='./')
 
     # model paramters
@@ -392,20 +403,20 @@ if __name__ == "__main__":
     if not args.train_dataset:
         print('Splitting data into train, test, and validation dataset.')
         tstart = time.time()
-        train_dataset, val_dataset = train_test_split(pos_data=args.pos_data, 
-                                                      neg_data=args.neg_data, 
-                                                      input_dtype=args.input_dtype,
-                                                      seq_len=args.seq_len,
-                                                      step=args.step,
-                                                      min_val=args.min_val,
-                                                      max_val= args.max_val,
-                                                      max_seqs=args.max_seqs,
-                                                      train_split=args.train_split,
-                                                      val_split=args.val_split,
-                                                      test_split=args.test_split,
-                                                      device=device,
-                                                      exp_id=args.exp_id,
-                                                      model_type=args.model_type)
+        train_dataset, val_dataset, mymean, mystd = train_test_split(pos_data=args.pos_data, 
+                                                                    neg_data=args.neg_data, 
+                                                                    input_dtype=args.input_dtype,
+                                                                    seq_len=args.seq_len,
+                                                                    step=args.step,
+                                                                    min_val=args.min_val,
+                                                                    max_val= args.max_val,
+                                                                    max_seqs=args.max_seqs,
+                                                                    train_split=args.train_split,
+                                                                    val_split=args.val_split,
+                                                                    test_split=args.test_split,
+                                                                    device=device,
+                                                                    exp_id=args.exp_id,
+                                                                    model_type=args.model_type)
         print(f'Finished splitting data in {round(time.time()-tstart, 3)} sec.')
     else:
         print("Loading user defined data...")
@@ -442,6 +453,8 @@ if __name__ == "__main__":
           model_type=args.model_type, 
           opt=args.opt,
           seq_len=args.seq_len, 
+          mean=args.mean,
+          std=args.std,
           device=device,
           epochs=args.epochs,
           steps_per_epoch=args.steps_per_epoch,

@@ -1,3 +1,4 @@
+import sys
 from tqdm import tqdm
 import random
 import time
@@ -5,11 +6,10 @@ import argparse
 import torch
 import os
 import pyarrow.parquet as pq
-from bisect import bisect_left, bisect_right
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from torchsummary import summary
-from nanopore_dataset import tune_signal, create_pred_sample_map_parquet
+from nanopore_dataset import tune_signal, create_pred_sample_map, create_pred_sample_map_parquet
 import multiprocessing
 from functools import partial
 import numpy as np
@@ -77,7 +77,7 @@ def skewed_t_distribution(x, loc = 11 , scale = 10, df = 5, min_dist = 0.7):
     return {k:max(v, min_dist) for k,v in zip(x,y)}
 
 
-def predictMod(dataloader, model_type, device, seq_len, weight, kmer_len, max_batches, time_batch = False):
+def predictMod(dataloader, model_type, device, seq_len, weight, kmer_len, max_batches, mean, std, time_batch = False):
 
     pred_out = {}
     pred_out_list = []
@@ -92,6 +92,8 @@ def predictMod(dataloader, model_type, device, seq_len, weight, kmer_len, max_ba
                     groups=1,
                     n_block=8,
                     n_classes=2,
+                    mean=mean, 
+                    std=std,
                     downsample_gap=2,
                     increasefilter_gap=4,
                     use_do=False).to(device)
@@ -109,6 +111,8 @@ def predictMod(dataloader, model_type, device, seq_len, weight, kmer_len, max_ba
                     groups=32,
                     n_block=48,
                     n_classes=2,
+                    mean=mean, 
+                    std=std,
                     downsample_gap=6,
                     increasefilter_gap=12,
                     use_do=False).to(device)
@@ -149,7 +153,7 @@ def predictMod(dataloader, model_type, device, seq_len, weight, kmer_len, max_ba
             idx +=1
     return pred_out, pred_out_list
 
-def predToBed12(predout, outfile, cutoff, method, save_raw=True):
+def predToBed12(predout, outfile, cutoff, save_raw=True):
     rgb = '0,0,0'
     outf = open(outfile, 'w')
     if save_raw:
@@ -170,7 +174,7 @@ def predToBed12(predout, outfile, cutoff, method, save_raw=True):
             poss = []
             scoress = []
             for (pos, scores) in sortedread:
-                score = aggregate_scores(scores, method[0])
+                score = np.mean(scores)
                 if save_raw:
                     if poss:
                         poss.append(pos-prepos)
@@ -220,8 +224,8 @@ def predToBed12(predout, outfile, cutoff, method, save_raw=True):
     outf.close()
     outfr.close()
 
-def pred(chrom, myreads, sample_map, sequences, model_type, batch_size, seq_len, device, weight, max_batches, 
-         cutoff, tmpdir, prefix, method, kmer_len, return_pred=False, make_bed=True):
+def pred(chrom, sample_map, sequences, model_type, batch_size, seq_len, device, weight, max_batches, 
+         cutoff, tmpdir, prefix, kmer_len, mean=80, std=16, return_pred=False, make_bed=True):
     '''
     make prediction for one chromsome.
     '''
@@ -229,10 +233,10 @@ def pred(chrom, myreads, sample_map, sequences, model_type, batch_size, seq_len,
     print(f'Loading {chrom} data into pytorch...')
     pred_dataset = NanoporeDataset(sample_map[chrom], sequences, device, seq_len)
     pred_dataloader = DataLoader(pred_dataset, batch_size = batch_size, shuffle=False)
-    predout, pred_out_list = predictMod(pred_dataloader, model_type, device, seq_len, weight, kmer_len, max_batches, cutoff)
+    predout, pred_out_list = predictMod(pred_dataloader, model_type, device, seq_len, weight, kmer_len, max_batches, mean, std, cutoff)
     if make_bed:
         bed12_out = os.path.join(tmpdir, prefix + '_' + chrom + '.bed')
-        predToBed12(predout, bed12_out, cutoff, method)
+        predToBed12(predout, bed12_out, cutoff)
         print(f'Prediction saved for {chrom}\n in {round(time.time()-tstart, 3)}s')
     if return_pred:
         return predout, pred_out_list
@@ -240,23 +244,26 @@ def pred(chrom, myreads, sample_map, sequences, model_type, batch_size, seq_len,
         del pred_dataset, pred_out_list, pred_dataloader, predout
 
 def add_parser(parser):
-    parser.add_argument('--sigalign', type = str, default='./', help = 'signal alignment file.')
+    parser.add_argument('--parquet', type = str, default='', help = 'signal alignment file in parquet format (R10 data).')
+    parser.add_argument('--sigalign', type = str, default='', help = 'signal alignment file in sigalign format (R9 data).')
     parser.add_argument('--bam', type = str, default='', help = 'BAM alignment file')
-    parser.add_argument('--region', type = str, default='', help = 'region to call prediction.')
+    parser.add_argument('--region', type = str, default='all', help = 'region to call prediction.')
     parser.add_argument('--readID', type = str, default='', help = 'read to idx tsv file.')
     parser.add_argument('--ref', type = str, default='', help = 'reference genome.')
-    parser.add_argument('--cutoff', type = float, default=0.3, help = 'cutoff value to separate pos and neg prediction.')
+    parser.add_argument('--cutoff', type = float, default=0.5, help = 'cutoff value to separate pos and neg prediction.')
     parser.add_argument('--seq_len', type = int, default = 400, help = 'input signal length. DEFUALT:400.')
-    parser.add_argument('--kmer_len', type = int, default = 6, help = 'kmer length in the pore. Ususally it is 6 for ONT R9 and 9 for ONT R10. DEFUALT:6.')
-    parser.add_argument('--step', type = int, default=0, help = 'step size to take for creating sample map. DEFUALT:0.')
+    parser.add_argument('--kmer_len', type = int, default = 9, help = 'kmer length in the pore. Ususally it is 6 for ONT R9 and 9 for ONT R10. DEFUALT:9.')
+    parser.add_argument('--step', type = int, default=10, help = 'step size to take for creating sample map. DEFUALT:0.')
     parser.add_argument('--readlist', nargs="*", default=[], help = 'a list of readIdx to make predictions')
     parser.add_argument('--device', type = str, default='auto', help = 'device type for pytorch. DEFUALT: auto.')
     parser.add_argument('--weight', type = str, default='', help = 'path to the model weights.')
     parser.add_argument('--thread', type = int, default=1, help = 'number of thread to use. DEFAULT:1.')
-    parser.add_argument('--outpath', type = str, default='./', help = 'output path.')
+    parser.add_argument('--outpath', type = str, default='', help = 'output path.')
     parser.add_argument('--prefix', type = str, default='', help = 'outfile prefix.')
     parser.add_argument('--batch_size', type = int, default='', help = '')
-    parser.add_argument('--model_type', type = int, default='resnet', help = '')
+    parser.add_argument('--model_type', type = str, default='resnet', help = '')
+    parser.add_argument('--mean', type=float, default=80.)
+    parser.add_argument('--std', type=float, default=16.)
     parser.add_argument('--max_batches', type = int, default=0, help = 'maximum batches to process per chromsome.')
     
 if __name__ == "__main__":
@@ -265,52 +272,72 @@ if __name__ == "__main__":
     add_parser(parser)
     args = parser.parse_args()
     
-    myreads = ''
-    if args.region:
-        assert args.bam, args.ref
-        print(f'Reading bam file and getting reads aligned to {args.region}')
-        myreads, chrom, start, end = idxToReads(args.bam, args.region, args.ref, args.readID)
-        readlist = [i for i in myreads]
-        print(readlist[:10])
-        print(f'Collected total number of reads: {len(readlist)}')
-    
-
     if args.device == 'auto':
         device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
     else:
         device = args.device
     print('Device type:', device)
-    torch.multiprocessing.set_start_method('spawn')
     
+    torch.multiprocessing.set_start_method('spawn')
     print('Creating sample map...')
     tstart = time.time()
-    sample_map, sequences = create_pred_sample_map(args.sigalign, 
-                                                   seq_len=args.seq_len, 
-                                                   readlist=args.readlist, 
-                                                   step=args.step)
+    
+    if args.sigalign:
+        myreads = ''
+        if args.region:
+            assert args.bam, args.ref
+            print(f'Reading bam file and getting reads aligned to {args.region}')
+            myreads, chrom, start, end = idxToReads(args.bam, args.region, args.ref, args.readID)
+            readlist = [i for i in myreads]
+            print(readlist[:10])
+            print(f'Collected total number of reads: {len(readlist)}')
+        sample_map, sequences = create_pred_sample_map(args.sigalign, 
+                                                    seq_len=args.seq_len, 
+                                                    readlist=args.readlist, 
+                                                    step=args.step)
+    
+    if args.parquet:
+        print(f'predicting on region: {args.region}...')
+        assert args.bam, args.ref
+        myreads, chrom, start, end = getAlignedReads(args.bam, args.region, args.ref)
+
+        sample_map, sequences = create_pred_sample_map_parquet(args.parquet, myreads, args.seq_len, args.step)
     
     print(f'Sample map created in {round(time.time()-tstart, 3)}s!')
 
+    print('calculatint sample mean and std...')
+    mymean = round(np.mean([item for sublist in sequences.values() for item in sublist]), 0)
+    mystd = round(np.std([item for sublist in sequences.values() for item in sublist]),0)
+    print(f'sample mean: {mymean}, sample std: {mystd}')
+    
     tmp_dir = tempfile.mkdtemp(dir=args.outpath)
     n_cores = min(args.thread, multiprocessing.cpu_count())  # Adjust number of cores if necessary
     print(f'Number of cores: {n_cores}')
-    pool = multiprocessing.Pool(processes=n_cores)
-    pool.map(partial(pred, 
-                     myreads=myreads,
-                     sample_map=sample_map,
-                     sequences=sequences, 
-                     batch_size=args.batch_size, 
-                     seq_len=args.seq_len, 
-                     device=device, 
-                     weight=args.weight, 
-                     kmer_len=args.kmer_len, 
-                     max_batches=args.max_batches,
-                     cutoff=args.cutoff,
-                     tmpdir=tmp_dir, 
-                     prefix=args.prefix), list(sample_map.keys()))
-    pool.close()
-    pool.join()
-
+    try:
+        pool = multiprocessing.Pool(processes=n_cores)
+        # chrom, sample_map, sequences, model_type, batch_size, seq_len, device, weight, max_batches, 
+        #      cutoff, tmpdir, prefix, kmer_len, return_pred=False, make_bed=True
+        pool.map(partial(pred,
+                        sample_map=sample_map,
+                        sequences=sequences,
+                        model_type = args.model_type,
+                        batch_size=args.batch_size, 
+                        seq_len=args.seq_len, 
+                        device=device, 
+                        weight=args.weight, 
+                        max_batches=args.max_batches,
+                        cutoff=args.cutoff,
+                        tmpdir=tmp_dir, 
+                        prefix=args.prefix,
+                        kmer_len=args.kmer_len,
+                        mean=mymean, std=mystd,
+                        return_pred=False), list(sample_map.keys()))
+        pool.close()
+        pool.join()
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        shutil.rmtree(tmp_dir)
+        sys.exit(1) 
     print('aggregating bed files...')
     output_file = os.path.join(args.outpath, args.prefix+'.bed')
     bed_files = os.path.join(tmp_dir, args.prefix+'_chr*.bed')

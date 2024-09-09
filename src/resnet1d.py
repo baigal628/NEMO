@@ -192,7 +192,7 @@ class ResNet1D(nn.Module):
 
     """
 
-    def __init__(self, in_channels, base_filters, kernel_size, stride, groups, n_block, n_classes, downsample_gap=2, increasefilter_gap=4, use_bn=True, use_do=True, verbose=False):
+    def __init__(self, in_channels, base_filters, kernel_size, stride, groups, n_block, n_classes, mean=80, std=16, downsample_gap=2, increasefilter_gap=4, use_bn=True, use_do=True, verbose=False):
         super(ResNet1D, self).__init__()
 
         self.verbose = verbose
@@ -202,6 +202,8 @@ class ResNet1D(nn.Module):
         self.groups = groups
         self.use_bn = use_bn
         self.use_do = use_do
+        self.mean = mean
+        self.std =std
 
         self.downsample_gap = downsample_gap # 2 for base model
         self.increasefilter_gap = increasefilter_gap # 4 for base model
@@ -258,7 +260,7 @@ class ResNet1D(nn.Module):
 
     def forward(self, x):
 
-        out = (x - 83.) / 17. # Normalizing based on the dataset statistics
+        out = (x - self.mean) / self.std # Normalizing based on the dataset statistics
 
         # first conv
         if self.verbose:

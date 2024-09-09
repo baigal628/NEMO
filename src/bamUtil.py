@@ -1,9 +1,10 @@
 import pysam
 import os
 from seqUtil import fetchSize, compliment
+import numpy as np
 
 def getAlignedReads(bam, region, genome, print_quer = False, print_name = False, refSeq = False, print_ref = False,
-                    print_align = False, compliment_reverse = True, include_quer = False):
+                    print_align = False, compliment_reverse = True, include_quer = False, qual = 15):
     '''
     Input:
         bam: input sam/bam file.
@@ -67,7 +68,8 @@ def getAlignedReads(bam, region, genome, print_quer = False, print_name = False,
     
     for (chrom, qstart, qend) in regions:
         for s in samFile.fetch(chrom, qstart, qend):
-            if not s.is_secondary and not s.is_supplementary:
+            if  s.is_mapped and not s.is_secondary and not s.is_supplementary:
+                if np.mean(s.query_qualities) < qual: continue
                 alignstart, alignend = s.reference_start, s.reference_end
                 if s.is_reverse:
                     strand = -1
@@ -112,6 +114,7 @@ def getAlignedReads(bam, region, genome, print_quer = False, print_name = False,
                     out[s.query_name] = (chrom, alignstart, alignend, strand)
         print('finshed fetching ', chrom, qstart, qend)
     samFile.close()
+    print(len(out), " reads in total.")
     return out, rchrom, rqstart, rqend
 
 

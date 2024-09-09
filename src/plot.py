@@ -15,6 +15,8 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from predict import aggregate_scores
 from seqUtil import fetchSize
 import matplotlib.image as mplimg
+import argparse
+import matplotlib.colors as colors
 
 def gettss(bed, genome, window, col = {'chrom':0, 'start':1, 'end':2, 'strand':5}):
     
@@ -38,32 +40,35 @@ def gettss(bed, genome, window, col = {'chrom':0, 'start':1, 'end':2, 'strand':5
                 tssposs[chr].append((left, pos, right, dir))
         return tssposs
 
-def plotDistribution(predout, outpath, prefix, method, legend, color):
+def plotDistribution(predfiles, outpath, prefix, legends, colors = 'tab:blue', strand = ''):
     
-    if not isinstance(predout, list):
-        predout = [predout]
-        color = [color]
-        legend = [legend]
+    if not isinstance(predfiles, list):
+        predfiles = [predfiles]
+        colors = [colors]
+        legends = [legends]
 
     preds = []
-    for i in range(len(predout)):
+    for i in range(len(predfiles)):
         pred = []
-        for chrom, reads in predout[i].items():
-            for read, read_pred in reads.items():
-                for pos, scores in read_pred.items():
-                    pred.append(aggregate_scores(scores, method[0]))
-        print('mean: ', np.mean(pred))
+        with open(predfiles[i], 'r') as infile:
+            for line in tqdm(infile):
+                if strand:
+                    thisstrand = 1 if line.strip().split('\t')[2] == '+' else -1
+                    if thisstrand != strand:continue
+                scores = line.strip().split('\t')[-1]
+                pred.extend([float(i) for i in scores.split(',')])
         preds.append(pred)
-    
+
+    print('start plotting...')
     for i in range(len(preds)):
-        plt.hist(preds[i], bins=100, alpha=0.4, label = legend[i], color=color[i])
+        plt.hist(preds[i], bins=100, alpha=0.4, label = legends[i], color=colors[i], density=True)
     
     plt.title(prefix)
+    plt.xlabel('prediction score')
+    plt.ylabel('density')
     plt.legend()
-    plt.savefig(outpath+prefix+'_dist.pdf', bbox_inches='tight', dpi = 200)
-    plt.show()
+    plt.savefig(outpath+prefix+'_density.pdf', bbox_inches='tight', dpi = 200)
     plt.close()
-
 
 def bedtoPred(bed, chrom = ''):
     pred={}
@@ -81,104 +86,62 @@ def bedtoPred(bed, chrom = ''):
             pred[chr][('read', 1)][astart] = prob
     return pred
 
-def plotModTrack(pred_dict, pregion, ncluster, cutoff= '', gtfFile = '', xticks_space = 100, outpath= '', prefix= '', figsize=(6,4), na_thred=0.1):
+def plotModTrack(predout, pregion, ncluster = '', outpath= '', prefix= '', gtfFile = '', xticks_space = 100, figsize=(6,3), na_thred=0.5, crange = [20, 120], height = 0.5):
     
-    labels, mtx, readnames, strands = clusterReadsfromPred(pred_dict, pregion, outpath=outpath, prefix=prefix, n_cluster=ncluster, na_thred=na_thred)
-    
+
+    labels, mtx, readnames, strands = clusterReadsfromPred(predout, pregion, outpath=outpath, prefix=prefix, n_cluster=ncluster, na_thred=na_thred)
+
     plt.figure(figsize=figsize)
+    ax = plt.axes((0.1, 0.1, 0.9, 0.75))
+    ax_gtf = plt.axes((0.1, 0.85, 0.9, 0.15), frameon=False)
+
+    if gtfFile:
+        plotGtfTrack(ax_gtf, gtfFile, pregion, Height = [1, 1], features = ['CDS','start_codon'], 
+                     genePlot = {'CDS': 'gene_name', 'start_codon': 'gene_name'}, 
+                     geneSlot = {'CDS': 3, 'start_codon': 3}, adjust_features='', colorpalates= ['purple','purple'])
+    
+    (R,G,B) = colorMap(palette = 'viridis', log_scale=False)
+    
     if ':' in pregion:
         chrom = pregion.split(':')[0]
         locus = pregion.split(':')[1].split('-')
         pstart, pend = int(locus[0]), int(locus[1])
 
-    if cutoff:
-        cutoff = (int(cutoff[0]*256), int(cutoff[1]*256))
-    print(f'using cutoff {cutoff}...')
-    clustered_idx = [x for _, x in sorted(zip(labels, np.arange(0,len(readnames))))]
+    ax.tick_params(
+        bottom=True, labelbottom=True,
+        left=True, labelleft=True,
+        right=False, labelright=False,
+        top=False, labeltop=False)
+    
+    ax.spines['top'].set_visible(True)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.spines['bottom'].set_visible(True)
+    ax.set_xticks(ticks= np.arange(pstart, pend+1, xticks_space))
+    ax.set_xticklabels(ax.get_xticks(), rotation = 50)
+    ax.set_xlim(pstart, pend)
+
+    
+    bottom=0
     thiscluster = ''
-    total, count = np.zeros(mtx.shape[1], dtype = float), np.zeros(mtx.shape[1], dtype = int)
-    
-    naxes = ncluster*2+1
-    height = 0.8/ncluster
-    axes = {}
-    b=0
-    for i in range(naxes-1):
-        h = 3/4*height if i%2 == 0 else 1/4*height
-        axes[i] = plt.axes((0.1, b, 0.9, h))
-        b +=h
-    
-    axes[naxes] = ax4= plt.axes((0.1, b, 0.9, 0.1))
-    
-    for i in axes:
-        if i%2 == 0:
-            axes[i].spines['top'].set_visible(False)
-            axes[i].spines['right'].set_visible(False)
-            axes[i].spines['left'].set_visible(False)
-            # Show only bottom spine
-            axes[i].spines['bottom'].set_visible(True)
-        else:
-            axes[i].spines['top'].set_visible(False)
-            axes[i].spines['right'].set_visible(False)
-            axes[i].spines['left'].set_visible(False)
-            # Show only bottom spine
-            axes[i].spines['bottom'].set_visible(False)
-            
-        axes[i].set_xticks(ticks= np.arange(pstart, pend+1, xticks_space))
-        axes[i].set_xlim(pstart, pend)
-    
-    if gtfFile:
-        plotGtfTrack(axes[naxes], gtfFile, pregion, Height = [1.5, 1.5], features = ['CDS', 'start_codon'], 
-                     genePlot = {'CDS': 'gene_name', 'start_codon': 'gene_name'}, 
-                     geneSlot = {'CDS': 3, 'start_codon': 3}, adjust_features='', colorpalates= ['tab:blue', 'tab:orange'])
-    
-    (R,G,B) = colorMap(palette = 'viridis')
-    thiscluster = ''
-    height = 1
     label = ''
-    for i in tqdm(clustered_idx):
+    tick_yaxis, label_yaxis = [],[]
+    total, count = np.zeros(mtx.shape[1], dtype = int), np.zeros(mtx.shape[1], dtype = int)
+    clustered_idx = [x for _, x in sorted(zip(labels, np.arange(0,len(readnames))))]  
     
+    for i in tqdm(clustered_idx):
         left = pstart
-        
         if labels[i] != thiscluster:
             thiscluster = labels[i]
+            
             if thiscluster:
-                aggregate = np.divide(count,total)
-                if np.max(total) < 3:
+                aggregate = np.divide(np.divide(count, total), 256)
+                if np.max(total) < 1:
                     aggregate = np.zeros(mtx.shape[1])
-                ax_agg.plot(np.arange(pstart, pend+1), aggregate)
-            
-                ax_agg.tick_params(
-                    bottom=False, labelbottom=False,
-                    left=False, labelleft=True,
-                    right=False, labelright=False,
-                    top=False, labeltop=False)
-                ax_agg.set_yticks(ticks= [0.0,1.0])
-                ax_mod.set_ylim(-1.5, bottom)
-                if thiscluster ==1:
-                    ax_mod.tick_params(
-                        bottom=True, labelbottom=True,
-                        left=False, labelleft=False,
-                        right=False, labelright=False,
-                        top=False, labeltop=False)
-                    ax_mod.set_xticklabels(ax_mod.get_xticks(), rotation = 50)
-                else:
-                    ax_mod.tick_params(
-                        bottom=False, labelbottom=False,
-                        left=False, labelleft=False,
-                        right=False, labelright=False,
-                        top=False, labeltop=False)
-                
-                if label in ['readname', 'strand']:
-                    ax_mod.set_yticks(ticks= tick_yaxis, labels = label_yaxis)
+                ax.bar(np.arange(pstart, pend+1), aggregate, bottom=bottom-0.5*height, width = 1.0, color = 'purple')
+                bottom += 2*height
                 total, count = np.zeros(mtx.shape[1], dtype = float), np.zeros(mtx.shape[1], dtype = int)
-                
-            bottom=0
-            total, count = np.zeros(mtx.shape[1], dtype = float), np.zeros(mtx.shape[1], dtype = int)
-            
-            ax_mod = axes[thiscluster*2]
-            ax_agg = axes[thiscluster*2+1]
-            tick_yaxis, label_yaxis = [],[]
-        
+
         if label == 'strand':
             tick_yaxis.append(bottom)
             symbol = '+' if strands[i] == 1 else '-'
@@ -187,89 +150,80 @@ def plotModTrack(pred_dict, pregion, ncluster, cutoff= '', gtfFile = '', xticks_
         elif label == 'readname':
             tick_yaxis.append(bottom)
             label_yaxis.append(str(readnames[i]))
+        else:
+            tick_yaxis.append(bottom)
+            # label_yaxis.append(bottom)
         
         for j in range(mtx.shape[1]):
             score = mtx[i, j]
-            # compute sum of binarized scores across reads in this cluster
-            thiscutoff = cutoff[1] if cutoff else 128
-            if score >= thiscutoff:
-                count[j] += 1
-            total[j] += 1
+            if not np.isnan(score):
+                count[j] += score
+                total[j] += 1
             
             # no score at this position
             if np.isnan(score):
                 col = 'lightgray'
             else:
-                color = int((score/256)*100)
-                if cutoff:
-                    if score <= cutoff[0]:
-                        color = 0
-                    elif score >= cutoff[1]:
-                        color = 100
+                # col = cmap(norm(score))
+                score = min(max(score, crange[0]), crange[1])
+                color = int(score-crange[0])
                 col=(R[color],G[color],B[color])
                 # thisalpha = min(abs(score-128)+50, 128)/128
             thisalpha = 1
             rectangle = mplpatches.Rectangle([left, bottom-(height*0.5)], 1, height, 
                                              facecolor = col, edgecolor = 'silver', linewidth = 0, alpha=thisalpha)
-            ax_mod.add_patch(rectangle)
+            ax.add_patch(rectangle)
             left += 1
         bottom +=height
     
-    if thiscluster:
-        aggregate = np.divide(count,total)
-        if np.max(total) < 3:
+
+    if thiscluster or thiscluster==0:
+        aggregate = np.divide(np.divide(count, total), 256)
+        if np.max(total) < 1:
             aggregate = np.zeros(mtx.shape[1])
-        ax_agg.plot(np.arange(pstart, pend+1), aggregate)
-    
-        ax_agg.tick_params(
-            bottom=False, labelbottom=False,
-            left=False, labelleft=True,
-            right=False, labelright=False,
-            top=False, labeltop=False)
-        
-        ax_agg.set_yticks(ticks= [0.0,1.0])
-        
-        ax_mod.set_ylim(-1.5, bottom)
-        if thiscluster ==0:
-            ax_mod.tick_params(
-                bottom=True, labelbottom=True,
-                left=False, labelleft=False,
-                right=False, labelright=False,
-                top=False, labeltop=False)
-            ax_mod.set_xticklabels(ax_mod.get_xticks(), rotation = 50)
-        else:
-            ax_mod.tick_params(
-                bottom=False, labelbottom=False,
-                left=False, labelleft=False,
-                right=False, labelright=False,
-                top=False, labeltop=False)
-        
-        if label in ['readname', 'strand']:
-            ax_mod.set_yticks(ticks= tick_yaxis, labels = label_yaxis)
+        ax.bar(np.arange(pstart, pend+1), aggregate, bottom=bottom-0.5*height, width = 1.0, color = 'purple')
+        bottom += 2*height
         total, count = np.zeros(mtx.shape[1], dtype = float), np.zeros(mtx.shape[1], dtype = int)
-    
+
     outfig = os.path.join(outpath, prefix+f'_c{ncluster}_mod_track_plot.pdf')
+
+    ax.set_yticks(ticks= tick_yaxis, labels = label_yaxis)
+    ax.set_ylim(0-0.5*height, bottom)
     plt.savefig(outfig, bbox_inches='tight')
 
-def colorMap(palette):
+def colorMap(palette, log_scale = False):
     if palette == 'viridis':
         viridis5 = (253/255, 231/255, 37/255)
         viridis4 = (94/255, 201/255, 98/255)
         viridis3 = (33/255, 145/255, 140/255)
         viridis2 = (59/255, 82/255, 139/255)
         viridis1 = (68/255, 1/255, 84/255)
-        R1=np.linspace(viridis1[0],viridis2[0],26)
-        G1=np.linspace(viridis1[1],viridis2[1],26)
-        B1=np.linspace(viridis1[2],viridis2[2],26)
-        R2=np.linspace(viridis2[0],viridis3[0],26)
-        G2=np.linspace(viridis2[1],viridis3[1],26)
-        B2=np.linspace(viridis2[2],viridis3[2],26)
-        R3=np.linspace(viridis3[0],viridis4[0],26)
-        G3=np.linspace(viridis3[1],viridis4[1],26)
-        B3=np.linspace(viridis3[2],viridis4[2],26)
-        R4=np.linspace(viridis4[0],viridis5[0],26)
-        G4=np.linspace(viridis4[1],viridis5[1],26)
-        B4=np.linspace(viridis4[2],viridis5[2],26)
+        if log_scale:
+            R1=np.logspace(np.log10(viridis1[0]),np.log10(viridis2[0]),26)
+            G1=np.logspace(np.log10(viridis1[1]),np.log10(viridis2[1]),26)
+            B1=np.logspace(np.log10(viridis1[2]),np.log10(viridis2[2]),26)
+            R2=np.logspace(np.log10(viridis2[0]),np.log10(viridis3[0]),26)
+            G2=np.logspace(np.log10(viridis2[1]),np.log10(viridis3[1]),26)
+            B2=np.logspace(np.log10(viridis2[2]),np.log10(viridis3[2]),26)
+            R3=np.logspace(np.log10(viridis3[0]),np.log10(viridis4[0]),26)
+            G3=np.logspace(np.log10(viridis3[1]),np.log10(viridis4[1]),26)
+            B3=np.logspace(np.log10(viridis3[2]),np.log10(viridis4[2]),26)
+            R4=np.logspace(np.log10(viridis4[0]),np.log10(viridis5[0]),26)
+            G4=np.logspace(np.log10(viridis4[1]),np.log10(viridis5[1]),26)
+            B4=np.logspace(np.log10(viridis4[2]),np.log10(viridis5[2]),26)
+        else:
+            R1=np.linspace(viridis1[0],viridis2[0],26)
+            G1=np.linspace(viridis1[1],viridis2[1],26)
+            B1=np.linspace(viridis1[2],viridis2[2],26)
+            R2=np.linspace(viridis2[0],viridis3[0],26)
+            G2=np.linspace(viridis2[1],viridis3[1],26)
+            B2=np.linspace(viridis2[2],viridis3[2],26)
+            R3=np.linspace(viridis3[0],viridis4[0],26)
+            G3=np.linspace(viridis3[1],viridis4[1],26)
+            B3=np.linspace(viridis3[2],viridis4[2],26)
+            R4=np.linspace(viridis4[0],viridis5[0],26)
+            G4=np.linspace(viridis4[1],viridis5[1],26)
+            B4=np.linspace(viridis4[2],viridis5[2],26)
         R=np.concatenate((R1[:-1],R2[:-1],R3[:-1],R4),axis=None)
         G=np.concatenate((G1[:-1],G2[:-1],G3[:-1],G4),axis=None)
         B=np.concatenate((B1[:-1],B2[:-1],B3[:-1],B4),axis=None)
@@ -295,6 +249,16 @@ def colorMap(palette):
                 myRGB[code].extend(col)
         return (myRGB['R'],myRGB['G'],myRGB['B'])
 
+def customColormap():
+    colors = [(68/255, 1/255, 84/255),  # viridis1
+              (59/255, 82/255, 139/255),  # viridis2
+              (33/255, 145/255, 140/255),  # viridis3
+              (94/255, 201/255, 98/255),  # viridis4
+              (253/255, 231/255, 37/255)]  # viridis5
+    
+    cmap_name = 'custom_viridis'
+    cmap = colors.LogNorm(vmin=1, vmax=256).from_list(cmap_name, colors, N=256)
+    return cmap
 
 def predToMtx(pred_dict, pregion, outpath = '', prefix = '', impute = False, strand = '',
               strategy = 'most_frequent', filter_read = True, write_out = True, na_thred = 0):
@@ -390,8 +354,105 @@ def predToMtx(pred_dict, pregion, outpath = '', prefix = '', impute = False, str
 
     return np.array(mtx), np.array(readnames), np.array(strands)
 
+def predToMtxfromPredfile(predfile, pregion, outpath = '', prefix = '', impute = False, strand = '',
+              strategy = 'most_frequent', filter_read = True, write_out = False, na_thred = 0.5):
 
-def clusterReadsfromPred(pred_dict, pregion, outpath, prefix, n_cluster = '', random_state = 42, method = '', show_elbow = False, nPC= 5, na_thred = 0, strand = '', strategy='most_frequent'):
+    '''
+    predToMtx function formats input prediction tsv file into an matrix.
+    
+    input:
+        prediction file
+        outpath
+        prefix
+        region
+        pregion
+        step
+        inpute
+        strategy
+        filter_read
+    output:
+        output matrix file
+    return:
+        readnames
+        strands
+    '''
+
+    chrom = pregion.split(':')[0]
+    locus = pregion.split(':')[1].split('-')
+    pstart, pend = int(locus[0]), int(locus[1])
+    outfile = outpath + prefix + '_' + pregion + '.mtx'
+
+    mtx = []
+    readnames = []
+    strands = []
+    
+    
+    with open(predfile, 'r') as infile:
+        for line in tqdm(infile):
+            thischrom = line.strip().split('\t')[1]
+            if thischrom!= chrom:
+                continue
+            
+            thisread = line.strip().split('\t')[0]
+            thisstrand = 1 if line.strip().split('\t')[2] == '+' else -1
+            if strand:
+                if thisstrand != strand:
+                    continue
+            start = int(line.strip().split('\t')[3])
+            scores = line.strip().split('\t')[-1]
+            scores = [float(i) for i in scores.split(',')]
+            
+            sortedread = [(start+i,j) for i, j in enumerate(scores)]
+            if sortedread[0][0] > pend or sortedread[-1][0] < pstart: continue
+            
+            pos_scores = {i:-1 for i in range(pstart, pend+1)}
+            poss = [i[0] for i in sortedread]
+            
+            left = bisect_left(poss, pstart)
+            
+            for i in range(left, len(sortedread)):
+                pos, score = sortedread[i]
+                if pos > pend:
+                    break
+                if pos not in pos_scores:
+                    continue
+                pos_scores[pos] = score
+            thisscores = np.array([v for v in pos_scores.values()])
+            if np.sum(thisscores) != -1*len(thisscores):
+                mtx.append(thisscores)
+                readnames.append(thisread)
+                strands.append(thisstrand)
+    
+    mtx = np.array(mtx, dtype = float)
+    mtx[mtx==-1] = np.nan
+    readnames = np.array(readnames, dtype = str)
+    strands = np.array(strands, dtype = int)
+
+    if filter_read:
+        print('number of reads before filtering:', len(readnames))
+        little_na = np.invert(np.isnan(mtx).sum(axis = 1)>(mtx.shape[1]*na_thred))
+        mtx = mtx[little_na,:]
+        readnames = readnames[little_na]
+        strands = strands[little_na]
+        print('number of reads kept:', len(readnames))
+
+    if impute:
+        imp = SimpleImputer(missing_values=np.nan, strategy=strategy)
+        mtx = imp.fit_transform(mtx)
+    
+    if write_out:
+        print('writing output to file: ', outfile)
+        mtxFh = open(outfile, 'w')
+        for line in mtx:
+            mtxFh.write(','.join(np.array(line, dtype = str)) + '\n')
+        mtxFh.close()
+    
+    if np.isnan(mtx).sum() != 0:
+        print('nan in output matrix!')
+
+    return np.array(mtx), np.array(readnames), np.array(strands)
+
+def clusterReadsfromPred(predout, pregion, outpath, prefix, n_cluster = '', random_state = 42, method = '', show_elbow = False, nPC= 5, na_thred = 0, strand = '', strategy='most_frequent'):
     '''
     
     ClusterRead function takes a modification prediction file as input and perform kmeans clustering on reads.
@@ -415,11 +476,13 @@ def clusterReadsfromPred(pred_dict, pregion, outpath, prefix, n_cluster = '', ra
     
     print('preprocessing input matrix...')
     
+    tomtx = predToMtx if isinstance(predout, dict) else predToMtxfromPredfile
+    
     # perform dimension reduction with pca before clustering
     if method == 'pca':
         print('Reading prediction file and outputing matrix...')
         prefix = prefix + "_method_pca"
-        mtx, readnames, strands = predToMtx(pred_dict=pred_dict, pregion=pregion, outpath=outpath, prefix=prefix, na_thred=na_thred, strand=strand)
+        mtx, readnames, strands = tomtx(predout, pregion, outpath=outpath, prefix=prefix, na_thred=na_thred, strand=strand)
         if np.isnan(mtx).sum() != 0:
             imp = SimpleImputer(missing_values=np.nan, strategy=strategy)
             new_mtx = imp.fit_transform(mtx)
@@ -456,12 +519,12 @@ def clusterReadsfromPred(pred_dict, pregion, outpath, prefix, n_cluster = '', ra
     elif method == 'cor':
         print('Reading prediction file and outputing matrix...')
         prefix = prefix + "_method_cor"
-        mtx, readnames, strands = predToMtx(pred_dict=pred_dict, pregion=pregion, outpath=outpath, prefix=prefix, na_thred=na_thred, strand=strand)
+        mtx, readnames, strands = tomtx(predout, pregion, outpath=outpath, prefix=prefix, na_thred=na_thred, strand=strand)
         res = stats.spearmanr(mtx, axis = 1, nan_policy = 'omit')
         new_mtx = res.statistic
 
     else:
-        mtx, readnames, strands = predToMtx(pred_dict=pred_dict, pregion=pregion, outpath=outpath,  prefix=prefix, na_thred=na_thred, strand=strand)
+        mtx, readnames, strands = tomtx(predout, pregion, outpath=outpath,  prefix=prefix, na_thred=na_thred, strand=strand)
         if np.isnan(mtx).sum() != 0:
             imp = SimpleImputer(missing_values=np.nan, strategy=strategy)
             new_mtx = imp.fit_transform(mtx)
@@ -590,8 +653,10 @@ def readGTF(gtfFile, chromPlot, startPlot, endPlot, genePlot, geneSlot, features
     sorted_gtfReads = dict(sorted(gtfReads.items(), key = lambda x:x[1]['start']))
     return (features, sorted_gtfReads)
 
-def plotGtfTrack(plot, gtfFile, region, features = ['CDS', 'start_codon'], genePlot = {'CDS': 'gene_name', 'start_codon': 'gene_name'}, 
-                 geneSlot = {'CDS': 3, 'start_codon': 3}, adjust_features = '', label_name = True, label_direction = False, 
+def plotGtfTrack(plot, gtfFile, region, thisbottom=0, 
+                 features = ['CDS', 'start_codon'], 
+                 genePlot = {'CDS': 'gene_name', 'start_codon': 'gene_name'}, 
+                 geneSlot = {'CDS': 3, 'start_codon': 3}, adjust_features = '', label_name = True, label_direction = True, 
                  colorpalates= ['royalblue', 'darkorange'], thinHeight = 0.2, Height = [0.8, 0.8], line_width = 0):
     
     
@@ -611,7 +676,7 @@ def plotGtfTrack(plot, gtfFile, region, features = ['CDS', 'start_codon'], geneP
     yRightMost = {}
     
     for transID in sorted_gtfReads:
-        y = 0
+        y = thisbottom
         start = sorted_gtfReads[transID]['start']
         end = sorted_gtfReads[transID]['end']
         while True:
@@ -626,9 +691,9 @@ def plotGtfTrack(plot, gtfFile, region, features = ['CDS', 'start_codon'], geneP
             else:
                 y +=1
         rectangle = mplpatches.Rectangle([start, bottom-(thinHeight/2)], end - start, thinHeight,
-                                        facecolor = 'grey',
-                                        edgecolor = 'black',
-                                        linewidth = line_width)
+                                                facecolor = 'grey',
+                                                edgecolor = 'black',
+                                                linewidth = line_width)
         if label_name:
             textStart = start
             if start < startPlot:
@@ -658,12 +723,27 @@ def plotGtfTrack(plot, gtfFile, region, features = ['CDS', 'start_codon'], geneP
             for index in range(0, len(blockStarts), 1):
                 blockStart = blockStarts[index]
                 blockEnd = blockEnds[index]
-                rectangle = mplpatches.Rectangle([blockStart-adjust_features[1], bottom-(Height[1]/2)], 
-                                                 blockEnd-blockStart+adjust_features[1], Height[1],
-                                    facecolor = colorpalates[1],
-                                    edgecolor = 'black',
-                                    linewidth = line_width)
-                plot.add_patch(rectangle)
+                # rectangle = mplpatches.Rectangle([blockStart-adjust_features[1], bottom-(Height[1]/2)], 
+                #                                  blockEnd-blockStart+adjust_features[1], Height[1],
+                #                     facecolor = colorpalates[1],
+                #                     edgecolor = 'black',
+                #                     linewidth = line_width)
+                # plot.add_patch(rectangle)
+                
+                
+                arrowlen = 50
+                # reverse strand
+                if blockEnd >= end:
+                    symbol_pos = min(end, endPlot)
+                    (arrowstart, arrowend) = (symbol_pos, -arrowlen)
+                # forward strand
+                else:
+                    symbol_pos = max(start, startPlot)
+                    (arrowstart, arrowend) = (symbol_pos, arrowlen)
+                plt.arrow(arrowstart, bottom+Height[1], arrowend, 0,
+                          width=0.1, head_width = 0.5, head_length = arrowlen*0.5,
+                          length_includes_head=True, fc= colorpalates[1], linewidth=0)
+
     
     plot.set_xlim(startPlot, endPlot)
     plot.set_ylim(-1,3)
@@ -862,7 +942,8 @@ def plotMotif(genome, bed, outpath, prefix, extend=10, shift=-150, center_name =
 
 def map_score_to_window(tsspos, strand, sortedread, hw, cutoff, strand_specific, odd, hmm_model):
     
-    cutoff = int(cutoff*256)
+    if cutoff:
+        cutoff = int(float(cutoff)*256)
     if strand_specific:
         strand = '-' if strand == -1 else 1
         if tsspos[3] != strand:
@@ -872,7 +953,7 @@ def map_score_to_window(tsspos, strand, sortedread, hw, cutoff, strand_specific,
     if readEnd < tsspos[0] or readStart > tsspos[2]:
         return -1
     poss =  [s[0] for s in sortedread]
-    scores = [np.mean(s[1]) for s in sortedread]
+    scores = [s[1] for s in sortedread]
     if hmm_model:
         if cutoff:
             scores = [1 if s > cutoff else 0 for s in scores]
@@ -901,7 +982,7 @@ def map_score_to_window(tsspos, strand, sortedread, hw, cutoff, strand_specific,
     return (reposs, scoress)
 
 
-def plotAggregate(ax, preddict, bed, genome, window, bed_col = {'chrom':0, 'start':1, 'end':2, 'strand':5}, space = 150, 
+def plotAggregate(ax, preddict, bed, genome, window, bed_col = {'chrom':0, 'start':1, 'end':2, 'strand':5}, space = 150, readnames = '', xtick_labels = False,
                   strand_specific=False, plot_singelread=False, to_mtx = False, subsample='', cutoff='', label = '', color='', alpha=1, hmm_model=''):
 
     hw = window/2 
@@ -915,6 +996,8 @@ def plotAggregate(ax, preddict, bed, genome, window, bed_col = {'chrom':0, 'star
         if chrom not in tssposs:
             continue
         for (read, strand) in tqdm(preddict[chrom]):
+            if readnames:
+                if read not in readnames: continue
             read_scores = [[] for i in range(window+1)]
             sortedread = sorted(preddict[chrom][(read, strand)].items())
             result = list(map(lambda x: map_score_to_window(x, strand=strand, sortedread=sortedread, hw=hw, cutoff=cutoff, strand_specific=strand_specific, odd=False, hmm_model=hmm_model), tssposs[chrom]))
@@ -935,6 +1018,7 @@ def plotAggregate(ax, preddict, bed, genome, window, bed_col = {'chrom':0, 'star
                     ax.set_xticks(np.concatenate((np.flip(np.arange(0, -hw-1, -space)[1:]), np.arange(0, hw+1, space)), axis=0), rotation='vertical')
                     ax.grid(alpha=0.5,axis = 'x')
             c +=1
+            print(c)
             if subsample:
                 if c == subsample:
                     break
@@ -943,9 +1027,15 @@ def plotAggregate(ax, preddict, bed, genome, window, bed_col = {'chrom':0, 'star
             ax.close()        
     agg_scores = [np.mean(x) if len(x) > 0 else 0 for x in agg_scores]
     ax.plot(np.arange(-hw, hw+1), agg_scores, color = color, label = label, alpha=alpha)
-    ax.set_xticks(np.concatenate((np.flip(np.arange(0, -hw-1, -space)[1:]), np.arange(0, hw+1, space)), axis=0), rotation='vertical')
-    ax.grid(alpha=0.5,axis = 'x')
-        
+    x_ticks = np.concatenate((np.flip(np.arange(0, -hw-1, -space)[1:]), np.arange(0, hw+1, space)), axis=0)
+    ax.set_xticks(x_ticks)
+    if xtick_labels:
+        ax.set_xticklabels(x_ticks, rotation='vertical')
+    else:
+        ax.set_xticklabels([])
+    ax.grid(alpha=0.5, axis = 'x')
+    if label:
+        ax.legend()
     if to_mtx:
         return np.array(tss_mtx), np.array(readnames), np.array(strands)
 
@@ -990,3 +1080,138 @@ def clusterReadsfromMtx(mtx, readnames, strands, n_cluster='', random_state = 22
     kmeans.fit(new_mtx)
     
     return kmeans.labels_, mtx, readnames, strands
+
+
+def plot_aggregate_from_pred(ax, predfile, bed, genome, window, bed_col = {'chrom':0, 'start':1, 'end':2, 'strand':5}, space = 150, readstoplot = '',
+                  strand_specific=False, plot_singelread=False, to_mtx = False, subsample='', cutoff='', label = '', color='', alpha=1, hmm_model='', return_value=True):
+
+    hw = window/2 
+    tssposs = gettss(bed, genome, window, col = bed_col)
+    
+    agg_scores = [[] for i in range(window+1)]
+    tss_mtx, readnames, strands = [], [], []
+    c = 0
+    color = color if color else 'tab:blue'
+    
+    with open(predfile, 'r') as infile:
+        for line in tqdm(infile):
+            chrom = line.strip().split('\t')[1]
+            if chrom not in tssposs:
+                continue
+            readname = line.strip().split('\t')[0]
+            if readstoplot:
+                if readname not in readstoplot: continue
+            strand = 1 if line.strip().split('\t')[2] == '+' else -1
+            start = int(line.strip().split('\t')[3])
+            scores = line.strip().split('\t')[-1]
+            scores = [float(i) for i in scores.split(',')]
+            sortedread = [(start+i,j) for i, j in enumerate(scores)]
+            read_scores = [[] for i in range(window+1)]
+            result = list(map(lambda x: map_score_to_window(x, strand=strand, sortedread=sortedread, hw=hw, cutoff=cutoff, strand_specific=strand_specific, odd=False, hmm_model=hmm_model), tssposs[chrom]))
+            for r in result:
+                if r != -1:
+                    for i, j in zip(r[0], r[1]):
+                        read_scores[i].append(j)
+                        agg_scores[i].append(j)
+            read_scores = [np.mean(x) if len(x) > 0 else 0 for x in read_scores]
+            if to_mtx:
+                if read_scores != [0 for i in range(len(read_scores))]:
+                    tss_mtx.append(read_scores)
+                    readnames.append(readname)
+                    strands.append(strand)
+            if plot_singelread:
+                if read_scores != [0 for i in range(len(read_scores))]:
+                    ax.plot(np.arange(-hw, hw+1), read_scores, alpha = 0.3, label= label)
+                    ax.set_xticks(np.concatenate((np.flip(np.arange(0, -hw-1, -space)[1:]), np.arange(0, hw+1, space)), axis=0), rotation='vertical')
+                    ax.grid(alpha=0.5,axis = 'x')
+            c +=1
+            if subsample:
+                if c == subsample:
+                    break
+            if plot_singelread:
+                ax.show()
+                ax.close()        
+    agg_scores = [np.mean(x) if len(x) > 0 else 0 for x in agg_scores]
+    ax.plot(np.arange(-hw, hw+1), agg_scores, color = color, label = label, alpha=alpha)
+    x_ticks = np.concatenate((np.flip(np.arange(0, -hw-1, -space)[1:]), np.arange(0, hw+1, space)), axis=0)
+    ax.set_xticks(x_ticks)
+    ax.set_xticklabels(x_ticks, rotation='vertical')
+    ax.grid(alpha=0.5,axis = 'x')
+    if label:
+        ax.legend()
+    if to_mtx:
+        return np.array(tss_mtx), np.array(readnames), np.array(strands)
+    if return_value:
+        return agg_scores
+    
+def readReadstoplot(readnames):
+    allreads=[]
+    with open(readnames, 'r') as infile:
+        for line in infile:
+            line= line.strip().split('\t')
+            allreads.append(line[0])
+    return allreads
+
+def add_parser(parser):
+    parser.add_argument('--plot', type = str, default='aggregate', help = 'signal alignment file in parquet format (R10 data).')
+    parser.add_argument('--pred', type = str, default='', help = 'signal alignment file in parquet format (R10 data).')
+    parser.add_argument('--bed', type = str, default='', help = 'read to idx tsv file.')
+    parser.add_argument('--bam', type = str, default='', help = 'BAM alignment file')
+    parser.add_argument('--region', type = str, default='all', help = 'region to call prediction.')
+    parser.add_argument('--mnase', type = str, default='', help = 'read to idx tsv file.')
+    parser.add_argument('--readnames', type = str, default='', help = 'a tsv file with reads to plot aggregates.')
+    parser.add_argument('--ref', type = str, default='', help = 'reference genome.')
+    parser.add_argument('--cutoff', type = str, default='', help = 'cutoff value to separate pos and neg prediction.')
+    parser.add_argument('--window', type = int, default = 1200, help = 'window size for aggregated plots. DEFUALT:1200.')
+    parser.add_argument('--space', type = int, default = 150, help = 'space for axis labels. DEFUALT:150.')
+    parser.add_argument('--xlabel', type = str, default = 'distance from +1 nuc', help = 'x axis label for the plot. DEFUALT:150.')
+    parser.add_argument('--label', type = str, default = '', help = 'label for the plot. DEFUALT:none')
+    parser.add_argument('--readlist', nargs="*", default=[], help = 'a list of readIdx to make predictions')
+    parser.add_argument('--outpath', type = str, default='', help = 'output path.')
+    parser.add_argument('--prefix', type = str, default='', help = 'outfile prefix.')
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='plot modifications')           
+    add_parser(parser)
+    args = parser.parse_args()
+    
+    if args.plot == 'aggregate':
+        if args.mnase:
+            print('reading mnase data...')
+            mnase_pred = bedtoPred(args.mnase)
+            print('start plotting...')
+            plt.figure(figsize=(6,4))
+            ax1 = plt.axes((0.1, 0.1 , 0.8, 0.5))
+            ax2 = plt.axes((0.1, 0.65 , 0.8, 0.3))
+            print('plotting prediction...')
+            if args.readnames:
+                readstoplot = readReadstoplot(args.readnames)
+                print(f'total number of reads: {len(readstoplot)}')
+            else:
+                readstoplot = ''
+            agg_scores = plot_aggregate_from_pred(ax1, args.pred, args.bed, args.ref, args.window, space=args.space, readstoplot=readstoplot, to_mtx=False, color = 'tab:blue', label=args.label, cutoff=args.cutoff)
+            print('plotting mnase...')
+            plotAggregate(ax2, mnase_pred, args.bed, args.ref, args.window, space=args.space, to_mtx=False, color = 'tab:green', label = 'MNase-seq')
+            plt.legend()
+            plt.xlabel(args.xlabel)
+            plt.savefig(args.outpath+f'{args.prefix}_aggregate_plot.pdf', bbox_inches='tight')
+            outfile = open(args.outpath+f'{args.prefix}_aggregate_score.tsv', 'w')
+            for i,j in enumerate(agg_scores):
+                outfile.write(f'{i}\t{j}\n')
+            outfile.close()
+        else:
+            plt.figure(figsize=(4,3))
+            ax1 = plt.axes((0.1, 0.1 , 0.8, 0.8), frameon=False)
+            if args.readnames:
+                readstoplot = readReadstoplot(args.readnames)
+                print(f'total number of reads: {len(readstoplot)}')
+            else:
+                readstoplot = ''
+            agg_scores = plot_aggregate_from_pred(ax1, args.pred, args.bed, args.ref, args.window, space=args.space, readstoplot=readstoplot, to_mtx=False, color = 'tab:blue', label=args.label, cutoff=args.cutoff)
+            plt.legend()
+            plt.xlabel(args.xlabel)
+            plt.savefig(args.outpath+f'{args.prefix}_aggregate_plot.pdf', bbox_inches='tight')
+            outfile = open(args.outpath+f'{args.prefix}_aggregate_score.tsv', 'w')
+            for i,j in enumerate(agg_scores):
+                outfile.write(f'{i}\t{j}\n')
+            outfile.close()

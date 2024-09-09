@@ -7,6 +7,7 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 import pyarrow.parquet as pq
 import random
+from bisect import bisect_left, bisect_right
 
 def tune_signal(sigList, min_val=-50, max_val=150):
     new_sigList = [max(min_val, min(max_val, round(float(signal), 3))) for signal in sigList]
@@ -250,7 +251,7 @@ def create_pred_sample_map(sigalign, seq_len, readlist, step):
                     kmer_move +=1
     return (sample_map, sequences)
 
-def create_pred_sample_map_parquet(parquet, readTostrand, seq_len, readlist, step, max_sequences = ''):
+def create_pred_sample_map_parquet(parquet, myreads, seq_len, step, max_sequences = ''):
     '''
     create_pred_sample_map function reads signal alignment file and prepare sample map for training nnt model.
     input:
@@ -276,7 +277,7 @@ def create_pred_sample_map_parquet(parquet, readTostrand, seq_len, readlist, ste
             myranges = range(batch.num_rows)
         for i in myranges:
             readIdx = batch['readname'][i].as_py()
-            if readIdx not in readTostrand:
+            if readIdx not in myreads:
                 continue
             chrom = batch['chr'][i].as_py()
             # this is end_3 in reverse read
@@ -284,13 +285,9 @@ def create_pred_sample_map_parquet(parquet, readTostrand, seq_len, readlist, ste
             kmer_move_table =  list(map(int, batch['siglenperkmer'][i].as_py()))
             sequence = tune_signal(batch['signals'][i].as_py())
             sequences[readIdx] = sequence
-            strand = readTostrand[readIdx]
+            strand = myreads[readIdx][-1]
             if strand == -1:
                 end_5 = end_5 + len(kmer_move_table)-1
-            
-            if readlist:
-                if readIdx not in readlist:
-                    continue
             if chrom not in sample_map:
                 sample_map[chrom] = []
             
