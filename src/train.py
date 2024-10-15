@@ -82,8 +82,9 @@ def train_test_split(pos_data, neg_data, input_dtype, seq_len, step, min_val, ma
     print(f'Number of modified train: {len(modified_train)}, val: {len(modified_val)}, test: {len(modified_test)}')
 
     print('computing mean and std...')
-    mymean = np.mean([item for sublist in modified_sequences + unmodified_sequences for item in sublist])
-    mystd = np.std([item for sublist in modified_sequences + unmodified_sequences for item in sublist])
+    mymean = round(np.mean([item for sublist in modified_sequences + unmodified_sequences for item in sublist]), 0)
+    mystd = round(np.std([item for sublist in modified_sequences + unmodified_sequences for item in sublist]), 0)
+    print(f'training data mean: {mymean}. training data std: {mystd}')
     print("Prepared.")
 
     ###############################
@@ -362,8 +363,6 @@ def add_parser(parser):
     parser.add_argument('--seq_len', type=int, default=400)
     parser.add_argument('--step', type=int, default=50)
     parser.add_argument('--max_seqs', type=int, default=None)
-    parser.add_argument('--mean', type=float, default=80.)
-    parser.add_argument('--std', type=float, default=16.)
     parser.add_argument('--outpath', type=str, default='./')
 
     # model paramters
@@ -453,8 +452,8 @@ if __name__ == "__main__":
           model_type=args.model_type, 
           opt=args.opt,
           seq_len=args.seq_len, 
-          mean=args.mean,
-          std=args.std,
+          mean=mymean,
+          std=mystd,
           device=device,
           epochs=args.epochs,
           steps_per_epoch=args.steps_per_epoch,

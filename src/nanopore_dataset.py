@@ -124,7 +124,6 @@ def create_splits(sequences,
             test_sequence_idxs.add(sequence_idx)
 
         sample_idx += np.floor((len(sequences[sequence_idx]) - seq_len)/step)+1
-        print(sample_idx)
 
     print(f'total reads: {len(sequence_idxs)}, ntrain: {len(train_sequence_idxs)}, nval: {len(val_sequence_idxs)}, ntest: {len(test_sequence_idxs)}')
 

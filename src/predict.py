@@ -262,8 +262,8 @@ def add_parser(parser):
     parser.add_argument('--prefix', type = str, default='', help = 'outfile prefix.')
     parser.add_argument('--batch_size', type = int, default='', help = '')
     parser.add_argument('--model_type', type = str, default='resnet', help = '')
-    parser.add_argument('--mean', type=float, default=80.)
-    parser.add_argument('--std', type=float, default=16.)
+    parser.add_argument('--sample_mean', type = float, default=0, help = 'sample mean to normalize the data')
+    parser.add_argument('--sample_std', type = float, default=0, help = 'sample standard deviation to normalize the data')
     parser.add_argument('--max_batches', type = int, default=0, help = 'maximum batches to process per chromsome.')
     
 if __name__ == "__main__":
@@ -305,10 +305,16 @@ if __name__ == "__main__":
     
     print(f'Sample map created in {round(time.time()-tstart, 3)}s!')
 
-    print('calculatint sample mean and std...')
-    mymean = round(np.mean([item for sublist in sequences.values() for item in sublist]), 0)
-    mystd = round(np.std([item for sublist in sequences.values() for item in sublist]),0)
-    print(f'sample mean: {mymean}, sample std: {mystd}')
+    if not args.sample_mean:
+        print('calculatint sample mean and std...')
+        mymean = round(np.mean([item for sublist in sequences.values() for item in sublist]), 0)
+        mystd = round(np.std([item for sublist in sequences.values() for item in sublist]),0)
+        print(f'sample mean: {mymean}, sample std: {mystd}')
+    
+    else:
+        mymean = args.sample_mean
+        mystd = args.sample_std
+        print(f'using user provided mean {mymean} and std {mystd}...')
     
     tmp_dir = tempfile.mkdtemp(dir=args.outpath)
     n_cores = min(args.thread, multiprocessing.cpu_count())  # Adjust number of cores if necessary

@@ -1,6 +1,10 @@
 import os
 import matplotlib.pyplot as plt
 import matplotlib.patches as mplpatches
+import matplotlib.colors as colors
+import matplotlib as mpl
+mpl.rcParams['pdf.fonttype'] = 42
+mpl.rcParams['font.size'] = 12
 import numpy as np
 import pysam
 from bisect import bisect_left
@@ -16,7 +20,8 @@ from predict import aggregate_scores
 from seqUtil import fetchSize
 import matplotlib.image as mplimg
 import argparse
-import matplotlib.colors as colors
+from sklearn.cluster import AgglomerativeClustering
+
 
 def gettss(bed, genome, window, col = {'chrom':0, 'start':1, 'end':2, 'strand':5}):
     
@@ -86,11 +91,13 @@ def bedtoPred(bed, chrom = ''):
             pred[chr][('read', 1)][astart] = prob
     return pred
 
-def plotModTrack(predout, pregion, ncluster = '', outpath= '', prefix= '', gtfFile = '', xticks_space = 100, figsize=(6,3), na_thred=0.5, crange = [20, 120], height = 0.5):
+def plotModTrack(predout, pregion, ncluster='',  outpath= '', prefix= '', gtfFile = '', xticks_space = 100, figsize=(6,3), na_thred=0.5, crange = [100, 200], height = [0.5, 1]):
     
 
     labels, mtx, readnames, strands = clusterReadsfromPred(predout, pregion, outpath=outpath, prefix=prefix, n_cluster=ncluster, na_thred=na_thred)
-
+    
+    ncluster = len(set(labels))
+    
     plt.figure(figsize=figsize)
     ax = plt.axes((0.1, 0.1, 0.9, 0.75))
     ax_gtf = plt.axes((0.1, 0.85, 0.9, 0.15), frameon=False)
@@ -135,11 +142,11 @@ def plotModTrack(predout, pregion, ncluster = '', outpath= '', prefix= '', gtfFi
             thiscluster = labels[i]
             
             if thiscluster:
-                aggregate = np.divide(np.divide(count, total), 256)
+                aggregate = np.divide(np.divide(count, total), 256)*height[1]
                 if np.max(total) < 1:
                     aggregate = np.zeros(mtx.shape[1])
-                ax.bar(np.arange(pstart, pend+1), aggregate, bottom=bottom-0.5*height, width = 1.0, color = 'purple')
-                bottom += 2*height
+                ax.bar(np.arange(pstart, pend+1), aggregate, bottom=bottom, width = 1.0, color = 'tab:blue')
+                bottom += 2*height[1]
                 total, count = np.zeros(mtx.shape[1], dtype = float), np.zeros(mtx.shape[1], dtype = int)
 
         if label == 'strand':
@@ -165,30 +172,33 @@ def plotModTrack(predout, pregion, ncluster = '', outpath= '', prefix= '', gtfFi
                 col = 'lightgray'
             else:
                 # col = cmap(norm(score))
-                score = min(max(score, crange[0]), crange[1])
-                color = int(score-crange[0])
+                # score = min(max(score, crange[0]), crange[1])
+                # color = int(score-crange[0])
+                color = int((score/256)*100)
+                # color = 100 if score>=220 else 0
                 col=(R[color],G[color],B[color])
                 # thisalpha = min(abs(score-128)+50, 128)/128
             thisalpha = 1
-            rectangle = mplpatches.Rectangle([left, bottom-(height*0.5)], 1, height, 
+            rectangle = mplpatches.Rectangle([left, bottom-(height[0]*0.5)], 1, height[0], 
                                              facecolor = col, edgecolor = 'silver', linewidth = 0, alpha=thisalpha)
             ax.add_patch(rectangle)
             left += 1
-        bottom +=height
+        bottom +=height[0]
     
 
     if thiscluster or thiscluster==0:
+        
         aggregate = np.divide(np.divide(count, total), 256)
         if np.max(total) < 1:
             aggregate = np.zeros(mtx.shape[1])
-        ax.bar(np.arange(pstart, pend+1), aggregate, bottom=bottom-0.5*height, width = 1.0, color = 'purple')
-        bottom += 2*height
+        ax.bar(np.arange(pstart, pend+1), aggregate, bottom=bottom, width = 1.0, color = 'tab:blue')
+        bottom += 2*height[1]
         total, count = np.zeros(mtx.shape[1], dtype = float), np.zeros(mtx.shape[1], dtype = int)
 
     outfig = os.path.join(outpath, prefix+f'_c{ncluster}_mod_track_plot.pdf')
 
     ax.set_yticks(ticks= tick_yaxis, labels = label_yaxis)
-    ax.set_ylim(0-0.5*height, bottom)
+    ax.set_ylim(0-0.5*height[0], bottom)
     plt.savefig(outfig, bbox_inches='tight')
 
 def colorMap(palette, log_scale = False):
@@ -355,7 +365,7 @@ def predToMtx(pred_dict, pregion, outpath = '', prefix = '', impute = False, str
     return np.array(mtx), np.array(readnames), np.array(strands)
 
 def predToMtxfromPredfile(predfile, pregion, outpath = '', prefix = '', impute = False, strand = '',
-              strategy = 'most_frequent', filter_read = True, write_out = False, na_thred = 0.5):
+              strategy = 'most_frequent', filter_read = True, write_out = True, na_thred = 0.5):
 
     '''
     predToMtx function formats input prediction tsv file into an matrix.
@@ -452,7 +462,7 @@ def predToMtxfromPredfile(predfile, pregion, outpath = '', prefix = '', impute =
 
     return np.array(mtx), np.array(readnames), np.array(strands)
 
-def clusterReadsfromPred(predout, pregion, outpath, prefix, n_cluster = '', random_state = 42, method = '', show_elbow = False, nPC= 5, na_thred = 0, strand = '', strategy='most_frequent'):
+def clusterReadsfromPred(predout, pregion, outpath, prefix, n_cluster = '', random_state = 42, method = '', selectFeatures = '', show_elbow = False, nPC= 5, na_thred = 0, strand = '', strategy='most_frequent'):
     '''
     
     ClusterRead function takes a modification prediction file as input and perform kmeans clustering on reads.
@@ -461,10 +471,10 @@ def clusterReadsfromPred(predout, pregion, outpath, prefix, n_cluster = '', rand
         predict: modification prediction tsv generated from modPredict function.
         n_cluster: number of centroids in kmeans clustering. If not assigned, number of cluster will be chosen based on the largest silhouette score among number of clusters 2-6.
         random_state: set seed to replicate the results
-        method:
+        selectFeature:
             pca: run pca on prediction matrix and use the first nPC to perform kmean clustering. NA values are imputed by the most frequent value in prediction matrix.
             cor: run spearman correlation on prediction matrix, and perform kmean clustering on spearman distances. NA values are kept in prediction matrix, but is ommited in spearman correlation analysis.
-            default(''): run kmean clustering on prediction matrix. NA values are imputed by the most frequent value in prediction matrix.
+            default(''): run clustering on prediction matrix. NA values are imputed by the most frequent value in prediction matrix.
         nPC: number of principal components to use in clustering if method is set as 'pca'.
         na_thred: percent of missing positions allowed each read. The less this value is, the more stricter filtering is.
     output:
@@ -479,7 +489,7 @@ def clusterReadsfromPred(predout, pregion, outpath, prefix, n_cluster = '', rand
     tomtx = predToMtx if isinstance(predout, dict) else predToMtxfromPredfile
     
     # perform dimension reduction with pca before clustering
-    if method == 'pca':
+    if selectFeatures == 'pca':
         print('Reading prediction file and outputing matrix...')
         prefix = prefix + "_method_pca"
         mtx, readnames, strands = tomtx(predout, pregion, outpath=outpath, prefix=prefix, na_thred=na_thred, strand=strand)
@@ -516,7 +526,7 @@ def clusterReadsfromPred(predout, pregion, outpath, prefix, n_cluster = '', rand
         plt.close()
         
     # perform pairwise spearmanr correlation analysis before clustering
-    elif method == 'cor':
+    elif selectFeatures == 'cor':
         print('Reading prediction file and outputing matrix...')
         prefix = prefix + "_method_cor"
         mtx, readnames, strands = tomtx(predout, pregion, outpath=outpath, prefix=prefix, na_thred=na_thred, strand=strand)
@@ -540,51 +550,82 @@ def clusterReadsfromPred(predout, pregion, outpath, prefix, n_cluster = '', rand
         print('matrix dimension:', mtx.shape)
 
     # select the best number of clusters based on silhouette score
-    if not n_cluster:
-        inertias = []
-        silhouette_avgs = []
-        n_clusters = [2, 3, 4, 5, 6]
-        for n_cluster in n_clusters:
-    
-            clusterer = KMeans(n_clusters=n_cluster, random_state=random_state)
-            cluster_labels = clusterer.fit_predict(new_mtx)
-            inertias.append(clusterer.inertia_)
-            silhouette_avg = silhouette_score(new_mtx, cluster_labels)
-            silhouette_avgs.append(silhouette_avg)
-            print(
-                "For n_clusters =",
-                n_cluster,
-                "The average silhouette_score is :",
-                silhouette_avg,
-            )
-            
-        if show_elbow:
-            plt.plot(n_clusters, inertias, marker='o')
-            plt.xlabel('Number of clusters')
-            plt.ylabel('Inertia')
-            plt.close()
+    if method == 'kmeans':
+        print('running K-means clustering...')
+        if not n_cluster:
+            inertias = []
+            silhouette_avgs = []
+            n_clusters = [2, 3, 4, 5, 6]
+            for n_cluster in n_clusters:
         
-        n_cluster = n_clusters[np.argmax(silhouette_avgs)]
-    
-    print('Clustering with number of clusters =', n_cluster)
-    outfile = open(outpath + prefix + 'clustering.tsv', 'w')
-    outfile.write('readname\tstrand\tcluster\n')
-    
-    # perform kmeans clustering
-    kmeans = KMeans(
-        init="random",
-        n_clusters=n_cluster,
-        n_init=10,
-        max_iter=300,
-        random_state=random_state)
+                clusterer = KMeans(n_clusters=n_cluster, random_state=random_state)
+                cluster_labels = clusterer.fit_predict(new_mtx)
+                inertias.append(clusterer.inertia_)
+                silhouette_avg = silhouette_score(new_mtx, cluster_labels)
+                silhouette_avgs.append(silhouette_avg)
+                print(
+                    "For n_clusters =",
+                    n_cluster,
+                    "The average silhouette_score is :",
+                    silhouette_avg,
+                )
+                
+            if show_elbow:
+                plt.plot(n_clusters, inertias, marker='o')
+                plt.xlabel('Number of clusters')
+                plt.ylabel('Inertia')
+                plt.close()
+            
+            n_cluster = n_clusters[np.argmax(silhouette_avgs)]
+        
+        print('Clustering with number of clusters =', n_cluster)
+        outfile = open(outpath + prefix + 'clustering.tsv', 'w')
+        outfile.write('readname\tstrand\tcluster\n')
+        
+        # perform kmeans clustering
+        kmeans = KMeans(
+            init="random",
+            n_clusters=n_cluster,
+            n_init=10,
+            max_iter=300,
+            random_state=random_state)
 
-    kmeans.fit(new_mtx)
-    for r,s,l in zip(readnames, strands, kmeans.labels_):
+        labels = kmeans.fit_predict(new_mtx)
+    
+    else:
+        print('running hierarchical clustering...')
+        if not n_cluster:
+            silhouette_avgs = []
+            n_clusters = [2, 3, 4, 5, 6]
+            for n_cluster in n_clusters:
+        
+                clusterer = AgglomerativeClustering(n_clusters=n_cluster)
+                cluster_labels = clusterer.fit_predict(new_mtx)
+                silhouette_avg = silhouette_score(new_mtx, cluster_labels)
+                silhouette_avgs.append(silhouette_avg)
+                print(
+                    "For n_clusters =",
+                    n_cluster,
+                    "The average silhouette_score is :",
+                    silhouette_avg,
+                )
+            
+            n_cluster = n_clusters[np.argmax(silhouette_avgs)]
+        
+        print('Clustering with number of clusters =', n_cluster)
+        outfile = open(outpath + prefix + 'clustering.tsv', 'w')
+        outfile.write('readname\tstrand\tcluster\n')
+        
+        # perform kmeans clustering
+        labels = AgglomerativeClustering(n_clusters=n_cluster).fit_predict(new_mtx)
+
+    for r,s,l in zip(readnames, strands, labels):
         line = '{}\t{}\t{}\n'.format(r, s, l)
         outfile.write(line)
     outfile.close()
 
-    return kmeans.labels_, mtx, readnames, strands
+
+    return labels, mtx, readnames, strands
 
 
 def readGTF(gtfFile, chromPlot, startPlot, endPlot, genePlot, geneSlot, features):
@@ -1025,7 +1066,9 @@ def plotAggregate(ax, preddict, bed, genome, window, bed_col = {'chrom':0, 'star
         if plot_singelread:
             ax.show()
             ax.close()        
+    agg_scores_len = [len(x) for x in agg_scores]
     agg_scores = [np.mean(x) if len(x) > 0 else 0 for x in agg_scores]
+    
     ax.plot(np.arange(-hw, hw+1), agg_scores, color = color, label = label, alpha=alpha)
     x_ticks = np.concatenate((np.flip(np.arange(0, -hw-1, -space)[1:]), np.arange(0, hw+1, space)), axis=0)
     ax.set_xticks(x_ticks)
@@ -1131,6 +1174,7 @@ def plot_aggregate_from_pred(ax, predfile, bed, genome, window, bed_col = {'chro
             if plot_singelread:
                 ax.show()
                 ax.close()        
+    agg_scores_len = [len(x) for x in agg_scores]
     agg_scores = [np.mean(x) if len(x) > 0 else 0 for x in agg_scores]
     ax.plot(np.arange(-hw, hw+1), agg_scores, color = color, label = label, alpha=alpha)
     x_ticks = np.concatenate((np.flip(np.arange(0, -hw-1, -space)[1:]), np.arange(0, hw+1, space)), axis=0)
@@ -1142,7 +1186,7 @@ def plot_aggregate_from_pred(ax, predfile, bed, genome, window, bed_col = {'chro
     if to_mtx:
         return np.array(tss_mtx), np.array(readnames), np.array(strands)
     if return_value:
-        return agg_scores
+        return agg_scores, agg_scores_len
     
 def readReadstoplot(readnames):
     allreads=[]
@@ -1152,13 +1196,83 @@ def readReadstoplot(readnames):
             allreads.append(line[0])
     return allreads
 
+def plotMotiffromFile(seqfile, outpath, prefix, seqlen = 9, space=1, title = '', y_lim=''):
+    
+    A=mplimg.imread('/private/home/gabai/tools/NEMO/img/A.png')
+    T=mplimg.imread('/private/home/gabai/tools/NEMO/img/T.png')
+    C=mplimg.imread('/private/home/gabai/tools/NEMO/img/C.png')
+    G=mplimg.imread('/private/home/gabai/tools/NEMO/img/G.png')
+    
+    pngList = {'A': A, 'C': C, 'G': G, 'T': T}
+    
+    motif_dict= {i:{'A':1, 'C':1, 'G':1, 'T':1} for i in range(seqlen)}
+    nCount=0
+    with open(seqfile, 'r') as infile:
+        for line in infile:
+            line=line.strip().split('\t')
+            nCount+=1
+            sequence = line[0]
+            for i in range(len(sequence)):
+                nt = sequence[i]
+                motif_dict[i][nt] +=1
+    s = 4
+    err = (1/np.log(2))*((s-1)/(2*nCount))
+    
+    figureWidth=5
+    figureHeight=2
+    
+    plt.figure(figsize=(figureWidth,figureHeight))
+    
+    panelWidth=1.5
+    panelHeight=0.5
+    
+    panel1 = plt.subplot()
+    
+    panel1.tick_params(bottom=True, labelbottom=True,
+                   left=True, labelleft=True,
+                   right=False, labelright=False,
+                   top=False, labeltop=False)
+    
+    panel1.set_xlim(0,seqlen)
+    
+    panel1.set_xticks(np.arange(0,seqlen+1, space))
+    # panel1.set_xlabel(f"Distance to\n {center_name}")
+    panel1.set_ylabel("Bits")
+    panel1.set_title(title)
+    # panel1.axvline(x = 0, color = 'black', linewidth = 0.5)
+    
+    max_y = 0
+    for pos in motif_dict.keys():
+        ntCount = list(motif_dict[pos].values())
+        totalCount = sum(ntCount)
+        freqCount = [nt/totalCount for nt in ntCount]
+        entropy = sum([-p*np.log2(p) for p in freqCount])
+        colHeight = np.log2(4) - (entropy+err)
+        print(entropy, colHeight)
+        if colHeight > max_y:
+            max_y = colHeight
+        height = {nt: freq*colHeight for nt,freq in zip(['A', 'C', 'G', 'T'], freqCount)}
+        Sortedheight = dict(sorted(height.items(), key=lambda x:x[1]))
+        bottom = 0
+        top = 0
+        for alphabet in Sortedheight.keys():
+            bottom = top
+            top = bottom + Sortedheight[alphabet]         #left,right,bottom,top
+            panel1.imshow(pngList[alphabet],extent=[pos,pos+1,bottom,top],aspect='auto',origin='upper')
+    if not y_lim:
+        panel1.set_ylim(0, max_y)
+    else:
+        panel1.set_ylim(y_lim[0], y_lim[1])
+    outfig = os.path.join(outpath, prefix+'_motif.pdf')
+    plt.savefig(outfig, bbox_inches='tight')
+
 def add_parser(parser):
-    parser.add_argument('--plot', type = str, default='aggregate', help = 'signal alignment file in parquet format (R10 data).')
+    parser.add_argument('--plot', type = str, default='aggregate', help = 'types of plots to make..')
     parser.add_argument('--pred', type = str, default='', help = 'signal alignment file in parquet format (R10 data).')
-    parser.add_argument('--bed', type = str, default='', help = 'read to idx tsv file.')
-    parser.add_argument('--bam', type = str, default='', help = 'BAM alignment file')
-    parser.add_argument('--region', type = str, default='all', help = 'region to call prediction.')
-    parser.add_argument('--mnase', type = str, default='', help = 'read to idx tsv file.')
+    parser.add_argument('--bed', type = str, default='', help = 'bed file with coordinates to plot aggregated modification scores. Default format: chrom:0, start:1, end:2, strand:5')
+    parser.add_argument('--bam', type = str, default='', help = 'bam alignment file')
+    parser.add_argument('--region', type = str, default='all', help = 'regions to include in the plot')
+    parser.add_argument('--mnase', type = str, default='', help = 'mnase-seq data in bedgraph format.')
     parser.add_argument('--readnames', type = str, default='', help = 'a tsv file with reads to plot aggregates.')
     parser.add_argument('--ref', type = str, default='', help = 'reference genome.')
     parser.add_argument('--cutoff', type = str, default='', help = 'cutoff value to separate pos and neg prediction.')
@@ -1189,7 +1303,7 @@ if __name__ == "__main__":
                 print(f'total number of reads: {len(readstoplot)}')
             else:
                 readstoplot = ''
-            agg_scores = plot_aggregate_from_pred(ax1, args.pred, args.bed, args.ref, args.window, space=args.space, readstoplot=readstoplot, to_mtx=False, color = 'tab:blue', label=args.label, cutoff=args.cutoff)
+            agg_scores, agg_scores_len = plot_aggregate_from_pred(ax1, args.pred, args.bed, args.ref, args.window, space=args.space, readstoplot=readstoplot, to_mtx=False, color = 'tab:blue', label=args.label, cutoff=args.cutoff)
             print('plotting mnase...')
             plotAggregate(ax2, mnase_pred, args.bed, args.ref, args.window, space=args.space, to_mtx=False, color = 'tab:green', label = 'MNase-seq')
             plt.legend()
@@ -1197,7 +1311,7 @@ if __name__ == "__main__":
             plt.savefig(args.outpath+f'{args.prefix}_aggregate_plot.pdf', bbox_inches='tight')
             outfile = open(args.outpath+f'{args.prefix}_aggregate_score.tsv', 'w')
             for i,j in enumerate(agg_scores):
-                outfile.write(f'{i}\t{j}\n')
+                outfile.write(f'{i}\t{j}\t{agg_scores_len[i]}\n')
             outfile.close()
         else:
             plt.figure(figsize=(4,3))
@@ -1207,11 +1321,11 @@ if __name__ == "__main__":
                 print(f'total number of reads: {len(readstoplot)}')
             else:
                 readstoplot = ''
-            agg_scores = plot_aggregate_from_pred(ax1, args.pred, args.bed, args.ref, args.window, space=args.space, readstoplot=readstoplot, to_mtx=False, color = 'tab:blue', label=args.label, cutoff=args.cutoff)
+            agg_scores, agg_scores_len = plot_aggregate_from_pred(ax1, args.pred, args.bed, args.ref, args.window, space=args.space, readstoplot=readstoplot, to_mtx=False, color = 'tab:blue', label=args.label, cutoff=args.cutoff)
             plt.legend()
             plt.xlabel(args.xlabel)
             plt.savefig(args.outpath+f'{args.prefix}_aggregate_plot.pdf', bbox_inches='tight')
             outfile = open(args.outpath+f'{args.prefix}_aggregate_score.tsv', 'w')
             for i,j in enumerate(agg_scores):
-                outfile.write(f'{i}\t{j}\n')
+                outfile.write(f'{i}\t{j}\t{agg_scores_len[i]}\n')
             outfile.close()

@@ -1,4 +1,5 @@
 from tqdm import tqdm
+import os
 import sys
 from seqUtil import fetchSize
 from plot import map_score_to_window, plotModTrack
@@ -78,12 +79,19 @@ def computeGeneAgg(predfile, tssposs, window, readnames = '', cutoff = '', stran
     return cov_gene, agg_scores_gene
 
 
-def scoreGenebyTss(agg_gene, cov_gene, tssAgg, outpath, prefix):
-    outfile = open(outpath+f'{prefix}_gene_tss_score_coverage_window{int(len(tssAgg))-1}.tsv', 'w')
-    outfile.write('geneid\tspearman_cor\tpearson_cor\tpval\tcoverage\tchr\ttss\tstrand\n')
+def scoreGenebyTss(agg_gene, cov_gene, tssAgg, window, outpath, prefix):
+    outfile = open(outpath+f'{prefix}_well_positioned_genes_score_coverage_window{int(len(tssAgg))-1}.tsv', 'w')
+    outfile.write('geneid\tspearman_cor\tpearson_cor\tpval\tcoverage\tvariation\tchr\ttss\tstrand\n')
+    outf_cov = open(os.path.join(outpath,  prefix+f'_gene_tss_{window}_coverage.bed'), 'w')
+    outf_scores = open(os.path.join(outpath,  prefix+f'_gene_tss_{window}_scores.bed'), 'w')
     for chrom in agg_gene:
         for gene in tqdm(agg_gene[chrom]):
+            outf_cov.write(f'{chrom}\t{gene[0]}\t{gene[2]}\t{gene[4]}\t{cov_gene[chrom][gene]}\t{gene[3]}\n')
+            agg_score_mean = ','.join([str(round(np.mean(x), 3)) if len(x) > 0 else '0' for x in agg_gene[chrom][gene]])
+            agg_score_std = ','.join([str(round(np.var(x), 3)) if len(x) > 0 else '0' for x in agg_gene[chrom][gene]])
+            outf_scores.write(f'{chrom}\t{gene[0]}\t{gene[2]}\t{gene[4]}\t{gene[3]}\t{agg_score_mean}\t{agg_score_std}\n')
             agg_scores = [np.mean(x) if len(x) > 0 else 0 for x in agg_gene[chrom][gene]]
+            # no overlapping reads for this gene
             if np.sum(agg_scores) == 0: continue
             res_spear = stats.spearmanr(tssAgg, agg_scores)
             res_pearson = stats.pearsonr(tssAgg, agg_scores)
@@ -91,48 +99,72 @@ def scoreGenebyTss(agg_gene, cov_gene, tssAgg, outpath, prefix):
             pear_cor = res_pearson.statistic
             pval = round(res_pearson.pvalue, 3)
             cov = cov_gene[chrom][gene]
-            outfile.write(f'{gene[4]}\t{spear_cor}\t{pear_cor}\t{pval}\t{cov}\t{chrom}\t{gene[1]}\t{gene[3]}\n')
+            var = round(np.mean([np.var(x) if len(x) > 0 else 0 for x in agg_gene[chrom][gene]]), 0)
+            outfile.write(f'{gene[4]}\t{spear_cor}\t{pear_cor}\t{pval}\t{cov}\t{var}\t{chrom}\t{gene[1]}\t{gene[3]}\n')
     outfile.close()
+    outf_cov.close()
+    outf_scores.close()
 
-def plotGeneLoci(predfile, genetsspos, window, outpath, prefix, gtfFile, ncluster, min_cor = 0.8, min_cov = 15, cragne=[20, 120]):
+def plotGeneStats(genetsspos, outpath, prefix):
 
     generank = pd.read_table(genetsspos)
     generank = generank.sort_values(by='pearson_cor', ascending=False)
     
     
-    plt.hist(generank['spearman_cor'], bins = 20, density=True)
-    plt.xlabel('sphe chrom gene spearman correlation with well positioned +1 nuc')
+    plt.hist(generank['spearman_cor'], bins = 'auto', density=True)
+    plt.xlabel('gene spearman correlation with well positioned +1 nuc')
     plt.ylabel('density')
-    plt.savefig(outpath+f'{prefix}_gene_tss_spearman.pdf')
+    plt.savefig(outpath+f'{prefix}_gene_tss_spearman.pdf', bbox_inches='tight')
     plt.close()
 
-    plt.hist(generank['pearson_cor'], bins = 20, density=True)
-    plt.xlabel('sphe chrom gene pearson correlation with well positioned +1 nuc')
+    plt.hist(generank['pearson_cor'], bins = 'auto', density=True)
+    plt.xlabel('gene pearson correlation with well positioned +1 nuc')
     plt.ylabel('density')
-    plt.savefig(outpath+f'{prefix}_gene_tss_spearman.pdf')
+    plt.savefig(outpath+f'{prefix}_gene_tss_spearman.pdf', bbox_inches='tight')
     plt.close()
     
-    plt.hist(generank['coverage'], bins = 20, density=True)
-    plt.xlabel('sphe chrom gene coverage')
+    plt.hist(generank['coverage'], bins = 'auto', density=True)
+    plt.xlabel('gene coverage')
     plt.ylabel('density')
-    plt.savefig(outpath+f'{prefix}_gene_tss_coverage.pdf')
+    plt.savefig(outpath+f'{prefix}_gene_tss_coverage.pdf', bbox_inches='tight')
+    plt.close()
+    
+    plt.hist(generank['variation'], bins = 'auto', density=True)
+    plt.xlabel('heterogeneity per gene')
+    plt.ylabel('density')
+    plt.savefig(outpath+f'{prefix}_gene_tss_heterogeneity.pdf', bbox_inches='tight')
     plt.close()
 
-    generank_wellpos = generank[(generank['pearson_cor'] >= min_cor) & (generank['coverage'] >= min_cov)]
+def filterGeneList(predfile, genetsspos, window, outpath, prefix, min_cor=0.6, min_cov=20, max_var=8000, plot_loci = False, gtfFile='', ncluster=''):
+    generank = pd.read_table(genetsspos)
+    generank
+    generank = generank.sort_values(by='pearson_cor', ascending=False)
     
+    generank_wellpos = generank[(generank['pearson_cor'] >= min_cor) & (generank['coverage'] >= min_cov) & (generank['variation'] <= max_var)]
+    print(f'number of genes with good coverage and well positioned tss: {generank_wellpos.shape[0]}')
+    
+    outf = open(os.path.join(outpath,  prefix+f'_well_positioned_genes_cov{min_cov}_cor{min_cor}_var{max_var}.bed'), 'w')
     hw = int(window/2)
+    genes = []
+    regions = []
     for i in range(generank_wellpos.shape[0]):
         geneid= generank_wellpos.iloc[i]['geneid']
-        print(f'gene: {geneid}...')
+        genes.append(geneid)
         chrom = generank_wellpos.iloc[i]['chr']
         tss = int(generank_wellpos.iloc[i]['tss'])
+        outf.write(f'{chrom}\t{tss-hw}\t{tss+hw}\t{geneid}\n')
         pregion = f'{chrom}:{tss-hw}-{tss+hw}'
-        plotModTrack(predfile, pregion, ncluster=ncluster, outpath=outpath, prefix= f'{prefix}_{geneid}', gtfFile=gtfFile, cutoff = '', xticks_space = 150, na_thred=0.3, crange=cragne)
+        regions.append(pregion)
+        if plot_loci:
+            print(f'gene: {geneid}...')
+            plotModTrack(predfile, pregion, ncluster=ncluster, outpath=outpath, prefix= f'{prefix}_{geneid}', gtfFile=gtfFile, xticks_space = 150, na_thred=0.2)
+    outf.close()
+    return genes, regions
 
 def add_parser(parser):
     parser.add_argument('--predfile', type = str, default='', help = 'prediction output file.')
     parser.add_argument('--nuc_agg', type = str, default='', help = 'aggregated scores at +1 nuc')
-    parser.add_argument('--bed', type = str, default='', help = 'read to idx tsv file.')
+    parser.add_argument('--bed', type = str, default='', help = '+1 nucleosome positions in bed format.')
     parser.add_argument('--ref', type = str, default='', help = 'reference genome.')
     parser.add_argument('--window', type = int, default=600, help = 'window size around +1 nuc to compute spearman correlation.')
     parser.add_argument('--inwindow', type = int, default=2000, help = 'input +1 nuc aggregation file window size')
@@ -141,9 +173,11 @@ def add_parser(parser):
     parser.add_argument('--prefix', type = str, default='', help = 'outfile prefix.')
     parser.add_argument('--genetsspos', type = str, default='', help = 'gene tss nuc positioning score and coverage file. ')
     parser.add_argument('--gtfFile', type = str, default='', help = 'gene annotation file')
-    parser.add_argument('--ncluster', type = int, default=1, help = 'gene annotation file')
-    parser.add_argument('--min_cor', type = float, default=0.8, help = 'minimum pearson correlation to keep for genes to plot.')
+    parser.add_argument('--ncluster', type = int, default=1, help = 'number of clusters for clustering reads.')
+    parser.add_argument('--plot_loci', action = 'store_true', help = 'plot single loci track on well positioned genes.')
+    parser.add_argument('--min_cor', type = float, default=0.6, help = 'minimum pearson correlation to keep for genes to plot.')
     parser.add_argument('--min_cov', type = int, default=15, help = 'minimum coverage to keep for genes to plot.')
+    parser.add_argument('--max_var', type = int, default=6000, help = 'maximum variation between reads for each gene.')
 
 
 if __name__ == "__main__":
@@ -162,7 +196,11 @@ if __name__ == "__main__":
         scoreGenebyTss(agg_gene, cov_gene, tssAgg, args.outpath, args.prefix)
 
         genetsspos = args.outpath+f'{args.prefix}_gene_tss_score_coverage_window{int(len(tssAgg))-1}.tsv'
-        plotGeneLoci(args.predfile, genetsspos, args.window, args.outpath, args.prefix, args.gtfFile, args.ncluster, args.min_cor, args.min_cov)
+        plotGeneStats(genetsspos, args.outpath, args.prefix)
+        
+        getGeneList(args.predfile, genetsspos, args.window, args.outpath, args.prefix, min_cor=args.min_cor, min_cov=args.min_cov, max_var=args.max_var, plot_loci=False, gtfFile=args.gtfFile, ncluster=args.ncluster)
     
     else:
-        plotGeneLoci(args.predfile, args.genetsspos, args.window, args.outpath, args.prefix, args.gtfFile, args.ncluster, args.min_cor, args.min_cov, args.crange)
+        plotGeneStats(args.genetsspos, args.outpath, args.prefix)
+        
+        getGeneList(args.predfile, args.genetsspos, args.window, args.outpath, args.prefix, min_cor=args.min_cor, min_cov=args.min_cov, max_var=args.max_var, plot_loci=args.plot_loci, gtfFile=args.gtfFile, ncluster=args.ncluster)

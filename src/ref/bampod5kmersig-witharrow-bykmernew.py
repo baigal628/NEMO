@@ -29,7 +29,7 @@ args = parser.parse_args()
 
 samfile = pysam.AlignmentFile(args.b, "rb")
 reader = p5.Reader(args.p)
-
+all_reads = reader.read_ids
 compbase = {'A':'T', 'T':'A', 'C':'G', 'G':'C', 'N':'N'}
 def revcomp(seq):
     newseq = []
@@ -44,6 +44,7 @@ for s in samfile:
     alignchr = s.reference_name
     if alignchr != 'chrM' and (not args.c or alignchr == args.c) and (not args.n or c < int(args.n)):
         if s.is_mapped and not s.is_supplementary and not s.is_secondary:
+            if s.query_name not in all_reads: continue
             alignstart, alignend = s.reference_start, s.reference_end
             base_qualities = s.query_qualities
             if sum(base_qualities) / len(base_qualities) <= 10: continue

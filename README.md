@@ -3,6 +3,14 @@
 <img src="./img/nemo_logo.png" width="200"/>
 </p>
 
+## Install NEMO
+
+```{bash}
+conda create -n nemo python=3.9
+conda activate nemo 
+pip install -r requirements.txt
+```
+
 ## Utilities
 ```{python}
 python3 findNemo.py --help
