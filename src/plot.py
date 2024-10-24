@@ -91,10 +91,10 @@ def bedtoPred(bed, chrom = ''):
             pred[chr][('read', 1)][astart] = prob
     return pred
 
-def plotModTrack(predout, pregion, ncluster='',  outpath= '', prefix= '', gtfFile = '', xticks_space = 100, figsize=(6,3), na_thred=0.5, crange = [100, 200], height = [0.5, 1]):
+def plotModTrack(predout, pregion, ncluster='',  outpath= '', prefix= '', gtfFile = '', labels='', mtx='', readnames='', strands='', xticks_space = 100, figsize=(6,3), na_thred=0.5, max_meth=200, crange = [100, 200], height = [0.5, 1]):
     
 
-    labels, mtx, readnames, strands = clusterReadsfromPred(predout, pregion, outpath=outpath, prefix=prefix, n_cluster=ncluster, na_thred=na_thred)
+    labels, mtx, readnames, strands = clusterReadsfromPred(predout, pregion, outpath=outpath, prefix=prefix, n_cluster=ncluster, na_thred=na_thred, max_meth=max_meth)
     
     ncluster = len(set(labels))
     
@@ -103,9 +103,7 @@ def plotModTrack(predout, pregion, ncluster='',  outpath= '', prefix= '', gtfFil
     ax_gtf = plt.axes((0.1, 0.85, 0.9, 0.15), frameon=False)
 
     if gtfFile:
-        plotGtfTrack(ax_gtf, gtfFile, pregion, Height = [1, 1], features = ['CDS','start_codon'], 
-                     genePlot = {'CDS': 'gene_name', 'start_codon': 'gene_name'}, 
-                     geneSlot = {'CDS': 3, 'start_codon': 3}, adjust_features='', colorpalates= ['purple','purple'])
+        plotGtfTrack(ax_gtf, gtfFile, pregion, Height = [1, 1], adjust_features='', colorpalates= ['purple','purple'])
     
     (R,G,B) = colorMap(palette = 'viridis', log_scale=False)
     
@@ -271,7 +269,7 @@ def customColormap():
     return cmap
 
 def predToMtx(pred_dict, pregion, outpath = '', prefix = '', impute = False, strand = '',
-              strategy = 'most_frequent', filter_read = True, write_out = True, na_thred = 0):
+              strategy = 'most_frequent', filter_read = True, write_out = True, na_thred = 0, max_meth=200):
 
     '''
     predToMtx function formats input prediction tsv file into an matrix.
@@ -347,6 +345,12 @@ def predToMtx(pred_dict, pregion, outpath = '', prefix = '', impute = False, str
         readnames = readnames[little_na]
         strands = strands[little_na]
         print('number of reads kept:', len(readnames))
+        print(f'filtering hyper-methylated reads...')
+        hyper_meth= np.invert(np.nanmean(mtx, axis = 1)>max_meth)
+        mtx = mtx[hyper_meth,:]
+        readnames = readnames[hyper_meth]
+        strands = strands[hyper_meth]
+        print(f'number of reads kept: {len(readnames)}')
 
     if impute:
         imp = SimpleImputer(missing_values=np.nan, strategy=strategy)
@@ -365,7 +369,7 @@ def predToMtx(pred_dict, pregion, outpath = '', prefix = '', impute = False, str
     return np.array(mtx), np.array(readnames), np.array(strands)
 
 def predToMtxfromPredfile(predfile, pregion, outpath = '', prefix = '', impute = False, strand = '',
-              strategy = 'most_frequent', filter_read = True, write_out = True, na_thred = 0.5):
+              strategy = 'most_frequent', filter_read = True, write_out = True, na_thred = 0.5, max_meth=200):
 
     '''
     predToMtx function formats input prediction tsv file into an matrix.
@@ -445,6 +449,12 @@ def predToMtxfromPredfile(predfile, pregion, outpath = '', prefix = '', impute =
         readnames = readnames[little_na]
         strands = strands[little_na]
         print('number of reads kept:', len(readnames))
+        print(f'filtering hyper-methylated reads...')
+        hyper_meth= np.invert(np.nanmean(mtx, axis = 1)>max_meth)
+        mtx = mtx[hyper_meth,:]
+        readnames = readnames[hyper_meth]
+        strands = strands[hyper_meth]
+        print(f'number of reads kept: {len(readnames)}')
 
     if impute:
         imp = SimpleImputer(missing_values=np.nan, strategy=strategy)
@@ -462,7 +472,7 @@ def predToMtxfromPredfile(predfile, pregion, outpath = '', prefix = '', impute =
 
     return np.array(mtx), np.array(readnames), np.array(strands)
 
-def clusterReadsfromPred(predout, pregion, outpath, prefix, n_cluster = '', random_state = 42, method = '', selectFeatures = '', show_elbow = False, nPC= 5, na_thred = 0, strand = '', strategy='most_frequent'):
+def clusterReadsfromPred(predout, pregion, outpath, prefix, n_cluster = '', random_state = 42, method = '', selectFeatures = '', show_elbow = False, nPC= 5, na_thred = 0, max_meth=220, strand = '', strategy='most_frequent'):
     '''
     
     ClusterRead function takes a modification prediction file as input and perform kmeans clustering on reads.
@@ -492,7 +502,7 @@ def clusterReadsfromPred(predout, pregion, outpath, prefix, n_cluster = '', rand
     if selectFeatures == 'pca':
         print('Reading prediction file and outputing matrix...')
         prefix = prefix + "_method_pca"
-        mtx, readnames, strands = tomtx(predout, pregion, outpath=outpath, prefix=prefix, na_thred=na_thred, strand=strand)
+        mtx, readnames, strands = tomtx(predout, pregion, outpath=outpath, prefix=prefix, na_thred=na_thred, strand=strand, max_meth=max_meth)
         if np.isnan(mtx).sum() != 0:
             imp = SimpleImputer(missing_values=np.nan, strategy=strategy)
             new_mtx = imp.fit_transform(mtx)
@@ -648,11 +658,13 @@ def readGTF(gtfFile, chromPlot, startPlot, endPlot, genePlot, geneSlot, features
                     continue
                 else:
                     if feature in features:
-                        splitPoint = str(genePlot[feature]) + ' "'
-                        transcript = line[8].split(';')[geneSlot[feature]]
-                        if splitPoint not in transcript:
-                            continue
-                        geneID = transcript.split(splitPoint)[1].split('"')[0]
+                        # first check if genePlot[feature][0] exist else use genePlot[feature][1]
+                        transcripts = line[8].strip().split('; ')
+                        transcript = {j.split(' ')[0]:j.split(' ')[1] for j in transcripts}
+                        for i in range(len(genePlot[feature])):
+                            if genePlot[feature][i] in transcript:
+                                geneID = transcript[genePlot[feature][i]].split('"')[1]
+                                break
                         # New gene
                         if geneID != gene:
                         # Store the previous genecript
@@ -695,9 +707,9 @@ def readGTF(gtfFile, chromPlot, startPlot, endPlot, genePlot, geneSlot, features
     return (features, sorted_gtfReads)
 
 def plotGtfTrack(plot, gtfFile, region, thisbottom=0, 
-                 features = ['CDS', 'start_codon'], 
-                 genePlot = {'CDS': 'gene_name', 'start_codon': 'gene_name'}, 
-                 geneSlot = {'CDS': 3, 'start_codon': 3}, adjust_features = '', label_name = True, label_direction = True, 
+                 features = ['gene', 'start_codon'], 
+                 genePlot = {'gene': ['gene_name', 'gene_id'], 'start_codon': ['gene_name', 'gene_id']}, 
+                 geneSlot = {'gene': 3, 'start_codon': 3}, adjust_features = '', label_name = True, label_direction = True, 
                  colorpalates= ['royalblue', 'darkorange'], thinHeight = 0.2, Height = [0.8, 0.8], line_width = 0):
     
     
@@ -1219,7 +1231,7 @@ def plotMotiffromFile(seqfile, outpath, prefix, seqlen = 9, space=1, title = '',
     err = (1/np.log(2))*((s-1)/(2*nCount))
     
     figureWidth=5
-    figureHeight=2
+    figureHeight=3
     
     plt.figure(figsize=(figureWidth,figureHeight))
     

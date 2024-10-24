@@ -115,24 +115,28 @@ def plotGeneStats(genetsspos, outpath, prefix):
     plt.xlabel('gene spearman correlation with well positioned +1 nuc')
     plt.ylabel('density')
     plt.savefig(outpath+f'{prefix}_gene_tss_spearman.pdf', bbox_inches='tight')
+    plt.show()
     plt.close()
 
     plt.hist(generank['pearson_cor'], bins = 'auto', density=True)
     plt.xlabel('gene pearson correlation with well positioned +1 nuc')
     plt.ylabel('density')
     plt.savefig(outpath+f'{prefix}_gene_tss_spearman.pdf', bbox_inches='tight')
+    plt.show()
     plt.close()
     
     plt.hist(generank['coverage'], bins = 'auto', density=True)
     plt.xlabel('gene coverage')
     plt.ylabel('density')
     plt.savefig(outpath+f'{prefix}_gene_tss_coverage.pdf', bbox_inches='tight')
+    plt.show()
     plt.close()
     
     plt.hist(generank['variation'], bins = 'auto', density=True)
     plt.xlabel('heterogeneity per gene')
     plt.ylabel('density')
     plt.savefig(outpath+f'{prefix}_gene_tss_heterogeneity.pdf', bbox_inches='tight')
+    plt.show()
     plt.close()
 
 def filterGeneList(predfile, genetsspos, window, outpath, prefix, min_cor=0.6, min_cov=20, max_var=8000, plot_loci = False, gtfFile='', ncluster=''):
@@ -152,7 +156,9 @@ def filterGeneList(predfile, genetsspos, window, outpath, prefix, min_cor=0.6, m
         genes.append(geneid)
         chrom = generank_wellpos.iloc[i]['chr']
         tss = int(generank_wellpos.iloc[i]['tss'])
-        outf.write(f'{chrom}\t{tss-hw}\t{tss+hw}\t{geneid}\n')
+        strand = generank_wellpos.iloc[i]['strand']
+        cor = round(float(generank_wellpos.iloc[i]['pearson_cor']), 3)
+        outf.write(f'{chrom}\t{tss-hw}\t{tss+hw}\t{geneid}\t{cor}\t{strand}\n')
         pregion = f'{chrom}:{tss-hw}-{tss+hw}'
         regions.append(pregion)
         if plot_loci:
