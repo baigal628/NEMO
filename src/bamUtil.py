@@ -186,7 +186,7 @@ def modBamtoPred(modbam, region=''):
         chr = s.reference_name
         if chr not in pred:
             pred[chr] = {}
-        if not s.is_secondary:
+        if s.is_mapped and not s.is_supplementary and not s.is_secondary:
             alignstart, alignend = s.reference_start, s.reference_end
             readname = s.query_name
             cigar = s.cigartuples

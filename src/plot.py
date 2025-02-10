@@ -23,7 +23,7 @@ import argparse
 from sklearn.cluster import AgglomerativeClustering
 
 
-def gettss(bed, genome, window, col = {'chrom':0, 'start':1, 'end':2, 'strand':5}):
+def gettss(bed, genome, window, col = {'chrom':0, 'start':1, 'end':2, 'gene':3, 'strand':5}):
     
     tssposs = {}
     hw = window/2
@@ -35,6 +35,7 @@ def gettss(bed, genome, window, col = {'chrom':0, 'start':1, 'end':2, 'strand':5
                 if len(line) == 1:
                     continue
                 chr, dir = line[col['chrom']], line[col['strand']]
+                gene = line[col['gene']]
                 if chr not in genomeSize:
                     continue
                 pos = int(line[col['start']]) if dir == '+' else int(line[col['end']])
@@ -42,7 +43,7 @@ def gettss(bed, genome, window, col = {'chrom':0, 'start':1, 'end':2, 'strand':5
                     tssposs[chr] = []
                 left=int(max(0, pos-hw))
                 right=int(min(pos+hw, genomeSize[chr]))
-                tssposs[chr].append((left, pos, right, dir))
+                tssposs[chr].append((left, pos, right, gene, dir))
         return tssposs
 
 def plotDistribution(predfiles, outpath, prefix, legends, colors = 'tab:blue', strand = ''):
@@ -915,7 +916,7 @@ def plotMotif(genome, bed, outpath, prefix, extend=10, shift=-150, center_name =
         if sequence:
             refDict[name]=sequence
 
-    motif_dict= {i:{'A':0, 'C':0, 'G':0, 'T':0} for i in np.arange(-extend, extend, 1)}
+    motif_dict= {i:{'A':0, 'C':0, 'G':0, 'T':0} for i in np.arange(-extend, extend+1, 1)}
     nCount=0
     
     with open(bed, 'r') as infile:
@@ -930,9 +931,10 @@ def plotMotif(genome, bed, outpath, prefix, extend=10, shift=-150, center_name =
                 center = nuc_pos - shift if strand == '-' else nuc_pos + shift
             else:
                 center = nuc_pos
-            left = center - int(extend)
+            left = center - int(extend)-1
             right = center + int(extend)
             sequence = refDict[chrom][left:right]
+            
             if strand == '-':
                 sequence = reverseCompliment(sequence)
             nCount +=1
@@ -960,7 +962,7 @@ def plotMotif(genome, bed, outpath, prefix, extend=10, shift=-150, center_name =
                        right=False, labelright=False,
                        top=False, labeltop=False)
     
-    panel1.set_xlim(-extend,extend)
+    panel1.set_xlim(-extend-0.5,extend+0.5)
     
     panel1.set_xticks(np.arange(-extend,extend+1, space))
     # panel1.set_yticks([0, 1])
@@ -970,12 +972,11 @@ def plotMotif(genome, bed, outpath, prefix, extend=10, shift=-150, center_name =
     # panel1.axvline(x = 0, color = 'black', linewidth = 0.5)
     
     max_y = 0
-    
-    for pos in motif_dict.keys():
+    for pos in motif_dict:
         ntCount = list(motif_dict[pos].values())
         totalCount = sum(ntCount)
         freqCount = [nt/totalCount for nt in ntCount]
-        entropy = sum([-p*np.log2(p) for p in freqCount])
+        entropy = sum([-p * np.log2(p) for p in freqCount if p != 0])
         colHeight = np.log2(4) - (entropy+err)
         if colHeight > max_y:
             max_y = colHeight
@@ -986,7 +987,7 @@ def plotMotif(genome, bed, outpath, prefix, extend=10, shift=-150, center_name =
         for alphabet in Sortedheight.keys():
             bottom = top
             top = bottom + Sortedheight[alphabet]         #left,right,bottom,top
-            panel1.imshow(pngList[alphabet],extent=[pos,pos+1,bottom,top],aspect='auto',origin='upper')
+            panel1.imshow(pngList[alphabet],extent=[pos-0.5,pos+0.5,bottom,top],aspect='auto',origin='upper')
 
     panel1.set_ylim(0, max_y)
     outfig = os.path.join(outpath, prefix+'_motif.pdf')
@@ -999,7 +1000,7 @@ def map_score_to_window(tsspos, strand, sortedread, hw, cutoff, strand_specific,
         cutoff = int(float(cutoff)*256)
     if strand_specific:
         strand = '-' if strand == -1 else 1
-        if tsspos[3] != strand:
+        if tsspos[4] != strand:
             return -1
     readStart, readEnd = sortedread[0][0], sortedread[-1][0]
     
@@ -1022,7 +1023,7 @@ def map_score_to_window(tsspos, strand, sortedread, hw, cutoff, strand_specific,
         if pos < tsspos[0]:
             continue
         # how many bp away from the center
-        repos = int(hw+pos-tsspos[1]) if tsspos[3] == '+' else int(tsspos[1]-pos+hw)
+        repos = int(hw+pos-tsspos[1]) if tsspos[4] == '+' else int(tsspos[1]-pos+hw)
         if not hmm_model:
             if cutoff:
                 score = 1 if score > cutoff else 0
@@ -1053,12 +1054,15 @@ def plotAggregate(ax, preddict, bed, genome, window, bed_col = {'chrom':0, 'star
                 if read not in readnames: continue
             read_scores = [[] for i in range(window+1)]
             sortedread = sorted(preddict[chrom][(read, strand)].items())
+            # map this read across all genes and return per gene score as a list
             result = list(map(lambda x: map_score_to_window(x, strand=strand, sortedread=sortedread, hw=hw, cutoff=cutoff, strand_specific=strand_specific, odd=False, hmm_model=hmm_model), tssposs[chrom]))
             for r in result:
+                # has overlap with this gene
                 if r != -1:
                     for i, j in zip(r[0], r[1]):
                         read_scores[i].append(j)
                         agg_scores[i].append(j)
+            # average across all genes overlapped with this read
             read_scores = [np.mean(x) if len(x) > 0 else 0 for x in read_scores]
             if to_mtx:
                 if read_scores != [0 for i in range(len(read_scores))]:
@@ -1137,7 +1141,7 @@ def clusterReadsfromMtx(mtx, readnames, strands, n_cluster='', random_state = 22
     return kmeans.labels_, mtx, readnames, strands
 
 
-def plot_aggregate_from_pred(ax, predfile, bed, genome, window, bed_col = {'chrom':0, 'start':1, 'end':2, 'strand':5}, space = 150, readstoplot = '',
+def plot_aggregate_from_pred(ax, predfile, bed, genome, window, bed_col = {'chrom':0, 'start':1, 'end':2, 'gene': 3, 'strand':5}, space = 150, readstoplot = '',
                   strand_specific=False, plot_singelread=False, to_mtx = False, subsample='', cutoff='', label = '', color='', alpha=1, hmm_model='', return_value=True):
 
     hw = window/2 
@@ -1208,7 +1212,7 @@ def readReadstoplot(readnames):
             allreads.append(line[0])
     return allreads
 
-def plotMotiffromFile(seqfile, outpath, prefix, seqlen = 9, space=1, title = '', y_lim=''):
+def plotMotiffromFile(seqfile, outpath, prefix, seqlen = 9, space=1, title = '', y_lim='', figsize=(5,3)):
     
     A=mplimg.imread('/private/home/gabai/tools/NEMO/img/A.png')
     T=mplimg.imread('/private/home/gabai/tools/NEMO/img/T.png')
@@ -1230,8 +1234,8 @@ def plotMotiffromFile(seqfile, outpath, prefix, seqlen = 9, space=1, title = '',
     s = 4
     err = (1/np.log(2))*((s-1)/(2*nCount))
     
-    figureWidth=5
-    figureHeight=3
+    figureWidth=figsize[0]
+    figureHeight=figsize[1]
     
     plt.figure(figsize=(figureWidth,figureHeight))
     
@@ -1252,15 +1256,13 @@ def plotMotiffromFile(seqfile, outpath, prefix, seqlen = 9, space=1, title = '',
     panel1.set_ylabel("Bits")
     panel1.set_title(title)
     # panel1.axvline(x = 0, color = 'black', linewidth = 0.5)
-    
     max_y = 0
     for pos in motif_dict.keys():
         ntCount = list(motif_dict[pos].values())
         totalCount = sum(ntCount)
         freqCount = [nt/totalCount for nt in ntCount]
-        entropy = sum([-p*np.log2(p) for p in freqCount])
+        entropy = sum([-p * np.log2(p) for p in freqCount if p != 0])
         colHeight = np.log2(4) - (entropy+err)
-        print(entropy, colHeight)
         if colHeight > max_y:
             max_y = colHeight
         height = {nt: freq*colHeight for nt,freq in zip(['A', 'C', 'G', 'T'], freqCount)}
