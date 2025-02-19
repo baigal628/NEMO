@@ -140,7 +140,8 @@ def predictMod(dataloader, model_type, device, seq_len, weight, kmer_len, max_ba
                 thisreadIdx = readIdx[i]
                 thisstrand = int(strand[i].item())
                 pred_out_list.append(thispred)
-                for thispos in range(thisstart, thisend+kmer_len):
+                # no need to add kmerlen because thisend is end of signal chunk
+                for thispos in range(thisstart, thisend):
                     # print(thisstart, thisend+kmer_len-1, thispos, thispred)
                     if chrom[i] not in pred_out: pred_out[chrom[i]] = {(thisreadIdx, thisstrand):{thispos:[thispred]}}
                     elif (thisreadIdx, thisstrand) not in pred_out[chrom[i]]: pred_out[chrom[i]][(thisreadIdx, thisstrand)] = {thispos:[thispred]}
