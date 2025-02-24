@@ -107,7 +107,7 @@ python3  ../../src/plot.py \
 
 **Probing chromatin accessibility with small molecule DNA intercalation and nanopore sequencing**
 
-Gali Bai, Namrita Dhillon, Colette Felton, Brett Meissner, Brandon Saint-John, Robert Shelansky, Elliot Meyerson, Eva Hrabeta-Robinson, Babak Hodjat, Hinrich Boeger, Angela N. Brooks
+Gali Bai*, Namrita Dhillon*, Colette Felton*, Brett Meissner*, Brandon Saint-John*, Robert Shelansky*, Elliot Meyerson, Eva Hrabeta-Robinson, Babak Hodjat, Hinrich Boeger, Angela N. Brooks
 bioRxiv 2024.03.20.585815; doi: https://doi.org/10.1101/2024.03.20.585815
 
 # 📬 Feedback & Contributions
