@@ -20,6 +20,7 @@ from predict import aggregate_scores
 from seqUtil import fetchSize
 import matplotlib.image as mplimg
 import argparse
+from scipy.signal import savgol_filter
 from sklearn.cluster import AgglomerativeClustering
 
 
@@ -92,7 +93,7 @@ def bedtoPred(bed, chrom = ''):
             pred[chr][('read', 1)][astart] = prob
     return pred
 
-def plotModTrack(predout, pregion, ncluster='',  outpath= '', prefix= '', gtfFile = '', labels='', mtx='', readnames='', strands='', xticks_space = 100, figsize=(6,3), na_thred=0.5, max_meth=200, crange = [100, 200], height = [0.5, 1]):
+def plotModTrack(predout, pregion, ncluster='',  outpath= '', prefix= '', gtfFile = '', labels='', mtx='', readnames='', strands='', xticks_space = 100, figsize=(6,4), na_thred=0.5, max_meth=200, crange = [100, 200], height = [1, 1]):
     
 
     labels, mtx, readnames, strands = clusterReadsfromPred(predout, pregion, outpath=outpath, prefix=prefix, n_cluster=ncluster, na_thred=na_thred, max_meth=max_meth)
@@ -126,8 +127,7 @@ def plotModTrack(predout, pregion, ncluster='',  outpath= '', prefix= '', gtfFil
     ax.set_xticks(ticks= np.arange(pstart, pend+1, xticks_space))
     ax.set_xticklabels(ax.get_xticks(), rotation = 50)
     ax.set_xlim(pstart, pend)
-
-    
+    scale = int(len(readnames)/3)
     bottom=0
     thiscluster = ''
     label = ''
@@ -135,17 +135,25 @@ def plotModTrack(predout, pregion, ncluster='',  outpath= '', prefix= '', gtfFil
     total, count = np.zeros(mtx.shape[1], dtype = int), np.zeros(mtx.shape[1], dtype = int)
     clustered_idx = [x for _, x in sorted(zip(labels, np.arange(0,len(readnames))))]  
     
-    for i in tqdm(clustered_idx):
+    for i in clustered_idx:
         left = pstart
         if labels[i] != thiscluster:
             thiscluster = labels[i]
             
             if thiscluster:
-                aggregate = np.divide(np.divide(count, total), 256)*height[1]
+                aggregate = np.divide(np.divide(count, total), 256)
+                aggregate = (aggregate-min(aggregate))/(max(aggregate)-min(aggregate))
+                aggregate = aggregate*scale
                 if np.max(total) < 1:
                     aggregate = np.zeros(mtx.shape[1])
-                ax.bar(np.arange(pstart, pend+1), aggregate, bottom=bottom, width = 1.0, color = 'tab:blue')
-                bottom += 2*height[1]
+                # ax.bar(np.arange(pstart, pend+1), aggregate, bottom=bottom, width = 1.0, color = 'tab:blue')
+                aggregate = savgol_filter(aggregate, 150, 3, mode="nearest")
+                ax.plot(np.arange(pstart, pend+1), aggregate+bottom, color = 'tab:blue')
+                # where prob=0 is at
+                ax.hlines(y = bottom, xmin=pstart, xmax=pend+1, color = 'black')
+                # where prob=1.0 is at
+                ax.hlines(y = bottom+scale, xmin=pstart, xmax=pend+1, color = 'black')
+                bottom += height[1]+scale
                 total, count = np.zeros(mtx.shape[1], dtype = float), np.zeros(mtx.shape[1], dtype = int)
 
         if label == 'strand':
@@ -178,9 +186,9 @@ def plotModTrack(predout, pregion, ncluster='',  outpath= '', prefix= '', gtfFil
                 col=(R[color],G[color],B[color])
                 # thisalpha = min(abs(score-128)+50, 128)/128
             thisalpha = 1
-            rectangle = mplpatches.Rectangle([left, bottom-(height[0]*0.5)], 1, height[0], 
-                                             facecolor = col, edgecolor = 'silver', linewidth = 0, alpha=thisalpha)
-            ax.add_patch(rectangle)
+            # rectangle = mplpatches.Rectangle([left, bottom-(height[0]*0.5)], 1, height[0], 
+            #                                  facecolor = col, edgecolor = 'silver', linewidth = 0, alpha=thisalpha)
+            # ax.add_patch(rectangle)
             left += 1
         bottom +=height[0]
     
@@ -190,8 +198,15 @@ def plotModTrack(predout, pregion, ncluster='',  outpath= '', prefix= '', gtfFil
         aggregate = np.divide(np.divide(count, total), 256)
         if np.max(total) < 1:
             aggregate = np.zeros(mtx.shape[1])
-        ax.bar(np.arange(pstart, pend+1), aggregate, bottom=bottom, width = 1.0, color = 'tab:blue')
-        bottom += 2*height[1]
+        aggregate = (aggregate-min(aggregate))/(max(aggregate)-min(aggregate))
+        aggregate = aggregate*scale
+        aggregate = savgol_filter(aggregate, 150, 3, mode="nearest")
+        ax.plot(np.arange(pstart, pend+1), aggregate+bottom, color = 'tab:blue')
+        # where prob=0 is at
+        ax.hlines(y = bottom, xmin=pstart, xmax=pend+1, color = 'black')
+        # where prob=1.0 is at
+        ax.hlines(y = bottom+scale, xmin=pstart, xmax=pend+1, color = 'black')
+        bottom += height[1]+ scale
         total, count = np.zeros(mtx.shape[1], dtype = float), np.zeros(mtx.shape[1], dtype = int)
 
     outfig = os.path.join(outpath, prefix+f'_c{ncluster}_mod_track_plot.pdf')
@@ -403,7 +418,7 @@ def predToMtxfromPredfile(predfile, pregion, outpath = '', prefix = '', impute =
     
     
     with open(predfile, 'r') as infile:
-        for line in tqdm(infile):
+        for line in infile:
             thischrom = line.strip().split('\t')[1]
             if thischrom!= chrom:
                 continue

@@ -3,129 +3,116 @@
 <img src="./img/nemo_logo.png" width="200"/>
 </p>
 
-## Install NEMO
+# 🚀 Overview
+NEMO is a deep learning tool designed to predict DNA modifications using nanopore long-read chromatin accessibility data. It allows users to train neural network models, predict modifications, and visualize results.
+
+# ⚡ Installation
+
+1. Clone the repository
 
 ```{bash}
+git clone https://github.com/baigal628/NEMO.git
+cd NEMO
+```
+2. Create and activate the conda environment:
+```{bash}
 conda create -n nemo python=3.9
-conda activate nemo 
+conda activate nemo
+```
+3. Install dependencies:
+```{bash}
 pip install -r requirements.txt
 ```
 
-## Utilities
-```{python}
-python3 findNemo.py --help
+# 🛠️ Basic utilities
 
-usage: findNemo.py [-h] [--mode MODE] [--region REGION] [--bam BAM] [--genome GENOME] [--eventalign EVENTALIGN] [--sigalign SIGALIGN]
-                   [--outpath OUTPATH] [--prefix PREFIX] [--model MODEL] [--weight WEIGHT] [--threads THREADS] [--step STEP]
-                   [--kmerWindow KMERWINDOW] [--signalWindow SIGNALWINDOW] [--load LOAD] [--threshold THRESHOLD]
-                   [--prediction PREDICTION] [--gtf GTF] [--refbdg REFBDG] [--predbdg PREDBDG] [--pregion PREGION]
-
-optional arguments:
-  -h, --help            show this help message and exit
-  --mode MODE, -mode MODE
-                        two modes available: [predict, plot]
-  --region REGION, -r REGION
-                        genomic coordinates to perform modification predictions. E.g. chrI:2000-5000 or chrI.
-  --bam BAM, -b BAM     sorted, indexed, and binarized alignment file.
-  --genome GENOME, -g GENOME
-                        reference genome fasta file
-  --eventalign EVENTALIGN, -e EVENTALIGN
-                        nanopolish eventalign file.
-  --sigalign SIGALIGN, -s SIGALIGN
-                        sigalign file if sigAlign file already exist. If not, must provide eventalign to generate sigAlign file.
-  --outpath OUTPATH, -o OUTPATH
-                        path to store the output files.
-  --prefix PREFIX, -p PREFIX
-                        prefix of output file names.
-  --model MODEL, -m MODEL
-                        deep neural network meodel used for prediction.
-  --weight WEIGHT, -w WEIGHT
-                        path to model weight.
-  --threads THREADS, -t THREADS
-                        number of threads.
-  --step STEP, -step STEP
-                        step to bin the region.
-  --kmerWindow KMERWINDOW, -kw KMERWINDOW
-                        kmer window size to extend bin.
-  --signalWindow SIGNALWINDOW, -sw SIGNALWINDOW
-                        signal Window size to feed into the model.
-  --load LOAD, -l LOAD  number of reads to load into each iterations. Each iteration will output a file.
-  --threshold THRESHOLD, -threshold THRESHOLD
-                        prediction value above this threshold willl be called as modified (1).
-  --prediction PREDICTION, -pred PREDICTION
-                        path to prediction file from modification prediction results.
-  --gtf GTF, -gtf GTF   path to General Transfer Format (GTF) file.
-  --refbdg REFBDG, -rbdg REFBDG
-                        path to ground truth ot short read bedgraph.
-  --predbdg PREDBDG, -pbdg PREDBDG
-                        path to aggregated prediction bedgraph from predToBedGraph call.
-  --pregion PREGION, -pregion PREGION
-                        region to plot. Can be gene name of the pre defined gene regions.
+## Navigate to Test Scripts
+```{bash}
+cd NEMO/test/sh/
 ```
 
-## II. Best Practice:
-## 1. Preidct modified regions using pre-trained model
+## 🔄 Data preprocessing for nanopore sequencing data
+
+Basecall data using dorado: https://github.com/nanoporetech/dorado
 
 ```{bash}
-python3 ./findNemo.py \
-    --mode predict \
-    --region chrXVI:66000-67600 \
-    --bam ./data/mapping/chrom_pass.sorted.bam \
-    --genome ./data/ref/sacCer3.fa \
-    --sigalign ./data/eventalign/chrom_pass_evenalign.tsv \
-    --outpath ./ \
-    --prefix cln2_prm \
-    --readlist ./chrom_pass.sorted_all_readID.tsv \
-    --threads 16 \
-    --step 20
-
-# With pre computed sigalign file:
-python3 ./findNemo.py \
-    --mode predict \
-    --region chrXVI:66000-67600 \
-    --bam ./data/mapping/chrom_pass.sorted.bam \
-    --genome ./data/ref/sacCer3.fa \
-    --sigalign ./data/sigalign/chrXVI_sig.tsv \
-    --outpath ./ \
-    --prefix cln2_prm \
-    --readlist ./chrom_pass.sorted_all_readID.tsv \
-    --threads 16 \
-    --step 20
+dorado basecaller dna_r9.4.1_e8_sup@v3.6 \
+    ../input/test.pod5 \
+    --emit-moves \
+    --device cuda:all \
+    --reference ../input/sacCer3.fa > ../input/test_reads.bam
 ```
 
-## 2. Aggregate prediction scores and export a bedgraph file
+Signal-to-Event Alignment: https://github.com/cafelton/pod5-to-kmer-signal
 
 ```{bash}
-python3 ./findNemo.py
-    --mode predict \
-    --region chrII \
-    --bam ./Add-seq/data/chrom/mapping/chrom.sorted.bam \
-    --genome ./Add-seq/data/ref/sacCer3.fa \
-    --outpath ./addseq_data/231110_test_nemo_v0_chrII/ \
-    --prefix 231112_addseq_chrII \
-    --prediction ./231110_addseq_chrII_0_prediction.tsv \
-    --threshold 0.65
+python3 ../../src/ref/bampod5kmersig-witharrow-sigalign.py \
+    -b ../input/test_reads.bam \
+    -p ../input/test.pod5
+    -o ../input/test
 ```
 
-## 3. plot modified regions using prediction file
+## 📈 Train and test model using positive and negative control data
+Preprocessed negative and positive data ar provided under ./nemo/test/output/
+
 ```{bash}
-python3 ./findNemo.py \
-    --mode plot \
-    --region chrXVI:66000-67600 \
-    --pregion CLN2 \
-    --prediction CLN2_prediction.tsv \
-    --bam ./chrom_pass.sorted.bam \
-    --genome ./data/ref/sacCer3.fa \
-    --sigalign ./chrXVI_sig.tsv \
-    --outpath ./results/figures/ \
-    --prefix cln2_prm \
-    --readlist ./chrom_pass.sorted_all_readID.tsv \
-    --threads 4 \
-    --step 20 \
-    --ncluster 3 \
-    --gtf ./data/ref/Saccharomyces_cerevisiae.R64-1-1.109.gtf
-```
-<p align="middle">
-<img src="./img/240123_resnetv1_CLN2_step20_chrXVI:66400-67550_clustered_reads.png"/>
-</p>
+python3 ../../src/train.py \
+    --exp_id test_r10 \
+    --neg_data ../output/can-sigalign.parquet \
+    --pos_data ../output/mod-sigalign.parquet \
+    --batch_size 256 \
+    --seq_len 400 \
+    --model_type resnet \
+    --outpath ../output/ \
+    --save_test \
+    --epochs 5 \
+    --steps_per_epoch 20 \
+    --val_steps_per_epoch 10 
 
+python3 ../../src/test.py \
+    --exp_id test_r10 \
+    --model_type resnet \
+    --test_dataset ../output/test_dataset_test_r10_resnet.pt \
+    --weight ../output/test_r10_resnet_best_model.pt \
+    --outpath  ../output/ \
+    --batch_size 256
+```
+## 🔍 Predict modifications on chromatin data
+```{bash}
+python3  ../../src/predict.py \
+    --bam ../input/test_reads.bam \
+    --parquet ../output/test.parquet \
+    --region 'chrI:500-2500' \
+    --seq_len 400 \
+    --step 200 \
+    --weight ../output/test_r10_resnet_best_model.pt \
+    --thread 4 \
+    --outpath ../output/ \
+    --prefix mod_prediction \
+    --batch_size 216 \
+```
+## 📊 plot metagene at TSS
+
+```{bash}
+python3  ../../src/plot.py \
+    --plot aggregate \
+    --pred ../output/mod_prediction.tsv \
+    --bed TSS.bed \
+    --ref ../input/sacCer3.fa \
+    --label 6mA \
+    --outpath ../output/ \
+    --prefix mod_prediction
+```
+# Reference
+
+**Probing chromatin accessibility with small molecule DNA intercalation and nanopore sequencing**
+
+Gali Bai, Namrita Dhillon, Colette Felton, Brett Meissner, Brandon Saint-John, Robert Shelansky, Elliot Meyerson, Eva Hrabeta-Robinson, Babak Hodjat, Hinrich Boeger, Angela N. Brooks
+bioRxiv 2024.03.20.585815; doi: https://doi.org/10.1101/2024.03.20.585815
+
+# 📬 Feedback & Contributions
+
+We welcome contributions! Feel free to submit issues or pull requests to improve NEMO.
+
+# ✨ Acknowledgments
+Developed with ❤️ by Brooks Lab and Cognizant AI Labs. Thanks to the contributors and open-source community for their support!
