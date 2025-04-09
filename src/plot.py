@@ -16,7 +16,6 @@ from sklearn.metrics import silhouette_samples, silhouette_score
 from scipy import stats
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from predict import aggregate_scores
 from seqUtil import fetchSize
 import matplotlib.image as mplimg
 import argparse

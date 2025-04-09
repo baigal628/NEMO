@@ -64,7 +64,6 @@ for s in samfile:
         break
 readchunks[(thischr, thisstart, thisend)] = thischunk
 
-
 print('done getting chunks of readnames')
 if not args.o: outprefix = '.'.join(args.b.split('/')[-1].split('.')[:-1])
 else: outprefix = args.o

@@ -26,9 +26,17 @@ pip install -r requirements.txt
 
 # 🛠️ Basic utilities
 
-## Navigate to Test Scripts
+## Navigate through test scripts to get full experience of NEMO functionalities
 ```{bash}
-cd NEMO/test/sh/
+cd ./NEMO/test/sh/
+```
+Run the following bash scripts in their order
+```{bash}
+ll ./NEMO/test/sh/
+0_pod5Tokmer.sh
+1_train_r10.sh
+2_predict_r10.sh
+3_plot.sh
 ```
 
 ## 🔄 Data preprocessing for nanopore sequencing data
@@ -36,6 +44,8 @@ cd NEMO/test/sh/
 Basecall data using dorado: https://github.com/nanoporetech/dorado
 
 ```{bash}
+# you do not need to run basecalling step for test dataset as we already provided basecalled bam file in the test data folder.
+
 dorado basecaller dna_r9.4.1_e8_sup@v3.6 \
     ../input/test.pod5 \
     --emit-moves \
@@ -46,10 +56,22 @@ dorado basecaller dna_r9.4.1_e8_sup@v3.6 \
 Signal-to-Event Alignment: https://github.com/cafelton/pod5-to-kmer-signal
 
 ```{bash}
+cat 0_pod5Tokmer.sh
+
 python3 ../../src/ref/bampod5kmersig-witharrow-sigalign.py \
-    -b ../input/test_reads.bam \
-    -p ../input/test.pod5
-    -o ../input/test
+    -b ../input/ang_0.sorted.bam \
+    -p ../input/ang_0_downsampled.pod5 \
+    -o ../output/ang_0
+
+python3 ../../src/ref/bampod5kmersig-witharrow-sigalign.py \
+    -b ../input/ang_500.sorted.bam \
+    -p ../input/ang_500_downsampled.pod5 \
+    -o ../output/ang_500
+
+python3 ../../src/ref/bampod5kmersig-witharrow-sigalign.py \
+    -b ../input/chrom_ang_500.sorted.bam \
+    -p ../input/chrom_ang_500_downsampled.pod5 \
+
 ```
 
 ## 📈 Train and test model using positive and negative control data
