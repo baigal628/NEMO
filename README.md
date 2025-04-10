@@ -235,6 +235,11 @@ Again, the above plot won't look nice since we are working with a small subset o
 Meta-gene plot centered at +1 nucleosomes using all reads
 ![metagene_real](./img/ang_agg.png)
 
+NEMO also has functions to plot predicted modifications at individual gene loci, which are currently not implemented as command lines.
+
+![metagene_real](./img/sm.png)
+Learn more here: https://github.com/baigal628/smaddseq_manuscript/blob/main/scripts/5_plot_single_loci.ipynb.
+
 # Reference
 
 **Probing chromatin accessibility with small molecule DNA intercalation and nanopore sequencing**
