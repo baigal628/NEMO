@@ -37,7 +37,6 @@ $ ls ./NEMO/test/sh/
 1_train_r10.sh
 2_predict_r10.sh
 3_plot.sh
-...
 ```
 
 ## 🔄 Data preprocessing for nanopore sequencing data
@@ -77,10 +76,11 @@ python3 ../../src/ref/bampod5kmersig-witharrow-sigalign.py \
 $ bash 0_pod5Tokmer.sh
 
 ```
-The output is a parquet file stores signal to kmer alignment
+The output is a parquet file which stores signal to kmer alignment.
 
 ```{bash}
 $ ls ../output/
+
 ang_0-sigalign.parquet
 ang_500-sigalign.parquet
 chrom_ang_500-sigalign.parquet
@@ -91,6 +91,7 @@ chrom_ang_500-sigalign.parquet
 ### Train model on positive and negative control data:
 ```{bash}
 $ cat 1_train_r10.sh
+
 python3 ../../src/train.py \
     --exp_id ang_test_r10 \
     --neg_data ../output/ang_0-sigalign.parquet \
@@ -106,7 +107,8 @@ python3 ../../src/train.py \
 
 $ bash 1_train_r10.sh
 ```
-Running training step creates three pytorch dataset object: training, validation, and testing dataset.
+Running training step creates three pytorch dataset objects: training, validation, and testing dataset.
+
 ```{bash}
 $ ls ../output/
 train_dataset_ang_test_r10_resnet.pt
@@ -116,7 +118,7 @@ test_dataset_ang_test_r10_resnet.pt
 
 This step also creates pytorch model and model parameters during the training step.
 
-- Best model and best model accuracy is stored:
+- Best model and best model accuracy are saved as:
 
 ```{bash}
 $ ll ../output/ang_test_r10_resnet_best_model.pt
@@ -127,7 +129,7 @@ train_loss      train_acc       val_loss        val_acc
 0.001733142599862601    0.7903645833333334      0.003052523401989178    0.6008522727272727
 ```
 
-- Training data accuracy, training data loss, validation data accuracy and validationdata loss for each epoch is stored.
+- Training data accuracy, training data loss, validation data accuracy and validationdata loss for each epoch are stored as:
 
 ```{bash}
 $ head ../output/ang_test_r10_resnet.csv
@@ -142,6 +144,8 @@ train_loss,val_loss,train_acc,val_acc
 ### Test model performance on stand-alone testdata
 
 ```{bash}
+cat 1_train_r10.sh
+
 python3 ../../src/test.py \
     --exp_id ang_test_r10 \
     --model_type resnet \
@@ -149,7 +153,6 @@ python3 ../../src/test.py \
     --weight ../output/ang_test_r10_resnet_best_model.pt \
     --outpath  ../output/ \
     --batch_size 256
-
 ```
 
 This will output model performance in a tsv file.
@@ -189,7 +192,7 @@ python3  ../../src/predict.py \
 $ bash 2_predict_r10.sh
 ```
 
-After running prediction, we will have a tsv and a bed12 file stores angelicin prediction score at each genomic position in each read.
+After running prediction, we will have a tsv and a bed12 file that store angelicin prediction score at each genomic position in each read.
 
 ```{bash}
 $ less -S ../output/ang_test_r10.tsv
@@ -207,7 +210,7 @@ chrI    84652   85235   abbb856f-61a6-47e7-9bf5-2547c81569a5    219000  -       
 ...
 ```
 
-## 📊 plot metagene at +1 nucleosome
+## 📊 Plot predicted modificaition scores at +1 nucleosome
 
 ```{bash}
 $ cat 3_plot.sh
